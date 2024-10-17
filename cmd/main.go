@@ -7,8 +7,8 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/vaanskii/vansify/db"
-	services_follow "github.com/vaanskii/vansify/services/"
 	services_auth "github.com/vaanskii/vansify/services/auth"
+	services_follow "github.com/vaanskii/vansify/services/follow"
 )
 
 func main() {
