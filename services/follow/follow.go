@@ -40,6 +40,11 @@ func FollowUser(c *gin.Context) {
 		return
 	}
 
+	if followerUsername == followingUsername {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "You cannot follow yourself"})
+		return
+	}
+
 	// Check if the follow relationship already exists
 	var followExists bool
 	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_username = ? AND following_username = ?)", followerUsername, followingUsername).Scan(&followExists)
