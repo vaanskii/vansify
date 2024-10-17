@@ -7,7 +7,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/vaanskii/vansify/db"
-	"github.com/vaanskii/vansify/handlers"
+	services "github.com/vaanskii/vansify/services/auth"
 )
 
 func main() {
@@ -26,9 +26,9 @@ func main() {
 	}))
 
 	// Routes
-	r.POST("/register", handlers.RegisterUser)
-	r.POST("/login", handlers.LoginUser)
-	r.GET("/verify", handlers.VerifyEmail)
+	r.POST("/register", services.RegisterUser)
+	r.POST("/login", services.LoginUser)
+	r.GET("/verify", services.VerifyEmail)
 	
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
