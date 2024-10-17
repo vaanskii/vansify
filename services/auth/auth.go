@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/lpernett/godotenv"
@@ -152,4 +153,41 @@ func LoginUser(c *gin.Context) {
     }
 
     c.JSON(http.StatusOK, gin.H{"token": token})
+}
+
+// Delete user function
+func DeleteUser(c *gin.Context) {
+	// Extract the token from the Authorization header
+	tokenString := c.GetHeader("Authorization")
+	if tokenString == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization token is required"})
+		return
+	}
+
+	// Remove the "Bearer " prefix from the token
+	tokenParts := strings.Split(tokenString, " ")
+	if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header format"})
+		return
+	}
+
+	tokenString = tokenParts[1]
+
+	// Validate the token
+	claims, err := utils.ValidateJWT(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+	// Get user id from claims
+	username := claims.Subject
+	
+	// Delete the user from the database
+	_, err = db.DB.Exec("DELETE FROM users WHERE username = ?", username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting user account"})
+		return 
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Account deleted successfully"})
 }
