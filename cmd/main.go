@@ -25,11 +25,12 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Routes
+	// Authorization Routes
 	r.POST("/register", services.RegisterUser)
 	r.POST("/login", services.LoginUser)
 	r.GET("/verify", services.VerifyEmail)
-	
+	r.DELETE("/delete-account", services.DeleteUser)
+
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "CORS-enabled route!",
