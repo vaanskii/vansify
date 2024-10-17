@@ -7,8 +7,8 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/vaanskii/vansify/db"
+	services_follow "github.com/vaanskii/vansify/services/"
 	services_auth "github.com/vaanskii/vansify/services/auth"
-	services_follow "github.com/vaanskii/vansify/services/follow"
 )
 
 func main() {
@@ -31,6 +31,7 @@ func main() {
 	r.POST("/login", services_auth.LoginUser)
 	r.GET("/verify", services_auth.VerifyEmail)
 	r.DELETE("/delete-account", services_auth.DeleteUser)
+
 
 	// Follow/Unfollow system Routers
 	r.POST("/follow/:username", services_follow.FollowUser)      
