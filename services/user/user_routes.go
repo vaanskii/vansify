@@ -28,7 +28,7 @@ type Following struct {
 	Username string `json:"username"`
 }
 
-func GetUserProfile(c *gin.Context) {
+func GetUserByUsername(c *gin.Context) {
 	username := c.Param("username")
 
 	var user models.User

@@ -40,7 +40,7 @@ func main() {
 		v1.DELETE("/unfollow/:username", follow.UnfollowUser)
 
 		// User Profile Retrieval
-		v1.GET("/user/:username", user.GetUserProfile)
+		v1.GET("/user/:username", user.GetUserByUsername)
 	}
 
 	r.GET("/", func(c *gin.Context) {
