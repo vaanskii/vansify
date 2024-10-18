@@ -27,19 +27,21 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Authorization Routes
-	r.POST("/register", auth.RegisterUser)
-	r.POST("/login", auth.LoginUser)
-	r.GET("/verify", auth.VerifyEmail)
-	r.DELETE("/delete-account", auth.DeleteUser)
+	v1 := r.Group("/v1")
+	{
+		// Authorization Routes
+		v1.POST("/register", auth.RegisterUser)
+		v1.POST("/login", auth.LoginUser)
+		v1.GET("/verify", auth.VerifyEmail)
+		v1.DELETE("/delete-account", auth.DeleteUser)
 
+		// Follow/Unfollow system Routes
+		v1.POST("/follow/:username", follow.FollowUser)
+		v1.DELETE("/unfollow/:username", follow.UnfollowUser)
 
-	// Follow/Unfollow system Routers
-	r.POST("/follow/:username", follow.FollowUser)      
-	r.DELETE("/unfollow/:username", follow.UnfollowUser)
-
-	
-	r.GET("/user/:username", user.GetUserProfile)
+		// User Profile Retrieval
+		v1.GET("/user/:username", user.GetUserProfile)
+	}
 
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
