@@ -29,25 +29,26 @@ func FollowUser(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
 	}
-	followerUsername := claims.Subject
-	followingUsername := c.Param("username")
+
+	followerID := claims.Subject // Assume this is now the user ID
+	followingID := c.Param("id") // Change this to get the ID instead of username
 
 	// Check if the following user exists
 	var exists bool
-	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = ?)", followingUsername).Scan(&exists)
+	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)", followingID).Scan(&exists)
 	if err != nil || !exists {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "User does not exist"})
 		return
 	}
 
-	if followerUsername == followingUsername {
+	if followerID == followingID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "You cannot follow yourself"})
 		return
 	}
 
 	// Check if the follow relationship already exists
 	var followExists bool
-	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_username = ? AND following_username = ?)", followerUsername, followingUsername).Scan(&followExists)
+	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_id = ? AND following_id = ?)", followerID, followingID).Scan(&followExists)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking follow status"})
 		return
@@ -59,16 +60,14 @@ func FollowUser(c *gin.Context) {
 	}
 
 	// Create a Follow relationship
-	_, err = db.DB.Exec("INSERT INTO followers (follower_username, following_username) VALUES (?, ?)", followerUsername, followingUsername)
+	_, err = db.DB.Exec("INSERT INTO followers (follower_id, following_id) VALUES (?, ?)", followerID, followingID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error following user"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Successfully followed user"})
+	c.JSON(http.StatusOK, gin.H{"message": "Successfully followed user", "following_id": followingID})
 }
-
-
 
 func UnfollowUser(c *gin.Context) {
 	tokenString := c.GetHeader("Authorization")
@@ -90,12 +89,13 @@ func UnfollowUser(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
 	}
-	followerUsername := claims.Subject
-	followingUsername := c.Param("username")
+
+	followerID := claims.Subject // Assume this is now the user ID
+	followingID := c.Param("id") // Change this to get the ID instead of username
 
 	// Check if the follow relationship exists
 	var followExists bool
-	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_username = ? AND following_username = ?)", followerUsername, followingUsername).Scan(&followExists)
+	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_id = ? AND following_id = ?)", followerID, followingID).Scan(&followExists)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking follow status"})
 		return
@@ -107,11 +107,11 @@ func UnfollowUser(c *gin.Context) {
 	}
 
 	// Remove the Follow relationship
-	_, err = db.DB.Exec("DELETE FROM followers WHERE follower_username = ? AND following_username = ?", followerUsername, followingUsername)
+	_, err = db.DB.Exec("DELETE FROM followers WHERE follower_id = ? AND following_id = ?", followerID, followingID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error unfollowing user"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Successfully unfollowed user"})
+	c.JSON(http.StatusOK, gin.H{"message": "Successfully unfollowed user", "following_id": followingID})
 }
