@@ -21,7 +21,7 @@ func sendVerificationEmail(email string, token string) error {
 	m.SetHeader("From", os.Getenv("SMTP_USER"))
 	m.SetHeader("To", email)
 	m.SetHeader("Subject", "Email Verification")
-	m.SetBody("text/html", "Please verify your email by clicking this link: <a href='http://localhost:8080/verify?token="+token+"'>Verify Email</a>")
+	m.SetBody("text/html", "Please verify your email by clicking this link: <a href='http://localhost:8080/v1/verify?token="+token+"'>Verify Email</a>")
 
 	// Convert SMTP_PORT from string to int
 	port, err := strconv.Atoi(os.Getenv("SMTP_PORT"))
