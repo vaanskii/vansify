@@ -19,7 +19,7 @@ func GenerateVerificationToken(email string) string {
 		return ""
 	}
 
-	return base64.URLEncoding.EncodeToString(b) + ":" + email 
+	return base64.URLEncoding.EncodeToString(b) + ":" + base64.URLEncoding.EncodeToString([]byte(email))
 }
 
 func VerifyEmail(c *gin.Context){
