@@ -7,17 +7,16 @@ import (
 )
 
 type User struct {
-	ID 		   int64  	 `json:"id"`
-	Username   string 	 `json:"username"`
-	Password   string 	 `json:"password"`
-	Email 	   string 	 `json:"email"`
-	Verified 	bool 	  `json:"verified"`
-	CreatedAt  time.Time `json:"created_at"`
-
-	Followers     []User     `json:"followers"`
-	Followings    []User     `json:"followings"`
-	FollowersCount int64      `json:"followers_count"`
-	FollowingsCount int64      `json:"followings_count"` 
+	ID 		   		 int64  	 `json:"id"`
+	Username   		 string 	 `json:"username"`
+	Password   		 string 	 `json:"password"`
+	Email 	   		 string 	 `json:"email"`
+	Verified 		  bool 	  	  `json:"verified"`
+	CreatedAt  		 time.Time   `json:"created_at"`
+	Followers        []User      `json:"followers"`
+	Followings       []User      `json:"followings"`
+	FollowersCount   int64       `json:"followers_count"`
+	FollowingsCount  int64       `json:"followings_count"` 
 }
 
 // HashPassword hashes the user's password
