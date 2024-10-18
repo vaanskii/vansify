@@ -1,4 +1,4 @@
-package services
+package auth
 
 import (
 	"database/sql"

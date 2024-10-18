@@ -7,8 +7,8 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/vaanskii/vansify/db"
-	services_auth "github.com/vaanskii/vansify/services/auth"
-	services_follow "github.com/vaanskii/vansify/services/follow"
+	auth "github.com/vaanskii/vansify/services/auth"
+	follow "github.com/vaanskii/vansify/services/follow"
 )
 
 func main() {
@@ -27,15 +27,15 @@ func main() {
 	}))
 
 	// Authorization Routes
-	r.POST("/register", services_auth.RegisterUser)
-	r.POST("/login", services_auth.LoginUser)
-	r.GET("/verify", services_auth.VerifyEmail)
-	r.DELETE("/delete-account", services_auth.DeleteUser)
+	r.POST("/register", auth.RegisterUser)
+	r.POST("/login", auth.LoginUser)
+	r.GET("/verify", auth.VerifyEmail)
+	r.DELETE("/delete-account", auth.DeleteUser)
 
 
 	// Follow/Unfollow system Routers
-	r.POST("/follow/:username", services_follow.FollowUser)      
-	r.DELETE("/unfollow/:username", services_follow.UnfollowUser)
+	r.POST("/follow/:username", follow.FollowUser)      
+	r.DELETE("/unfollow/:username", follow.UnfollowUser)
 
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
