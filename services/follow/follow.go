@@ -1,6 +1,7 @@
-package services
+package follow
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
@@ -15,13 +16,11 @@ func FollowUser(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization token is required"})
 		return
 	}
-
 	tokenParts := strings.Split(tokenString, " ")
 	if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header format"})
 		return
 	}
-
 	tokenString = tokenParts[1]
 
 	claims, err := utils.ValidateJWT(tokenString)
@@ -30,13 +29,23 @@ func FollowUser(c *gin.Context) {
 		return
 	}
 
-	followerID := claims.Subject // Assume this is now the user ID
-	followingID := c.Param("id") // Change this to get the ID instead of username
+	followerUsername := claims.Subject // The username of the logged-in user
+	followingUsername := c.Param("username") // The username of the user to follow
 
-	// Check if the following user exists
-	var exists bool
-	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)", followingID).Scan(&exists)
-	if err != nil || !exists {
+	// Get follower ID from follower username
+	var followerID int64
+	err = db.DB.QueryRow("SELECT id FROM users WHERE username = ?", followerUsername).Scan(&followerID)
+	if err != nil {
+		log.Printf("Error retrieving follower ID: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving follower ID"})
+		return
+	}
+
+	// Get following ID from following username
+	var followingID int64
+	err = db.DB.QueryRow("SELECT id FROM users WHERE username = ?", followingUsername).Scan(&followingID)
+	if err != nil {
+		log.Printf("Error retrieving following ID: %v\n", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "User does not exist"})
 		return
 	}
@@ -50,6 +59,7 @@ func FollowUser(c *gin.Context) {
 	var followExists bool
 	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_id = ? AND following_id = ?)", followerID, followingID).Scan(&followExists)
 	if err != nil {
+		log.Printf("Error checking follow status: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking follow status"})
 		return
 	}
@@ -62,12 +72,13 @@ func FollowUser(c *gin.Context) {
 	// Create a Follow relationship
 	_, err = db.DB.Exec("INSERT INTO followers (follower_id, following_id) VALUES (?, ?)", followerID, followingID)
 	if err != nil {
+		log.Printf("Error creating follow relationship: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error following user"})
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Successfully followed user", "following_id": followingID})
+	c.JSON(http.StatusOK, gin.H{"message": "Successfully followed user"})
 }
+
 
 func UnfollowUser(c *gin.Context) {
 	tokenString := c.GetHeader("Authorization")
@@ -89,9 +100,24 @@ func UnfollowUser(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
 	}
+	followerUsername := claims.Subject // The username of the logged-in user
+	followingUsername := c.Param("username") // The username of the user to unfollow
 
-	followerID := claims.Subject // Assume this is now the user ID
-	followingID := c.Param("id") // Change this to get the ID instead of username
+	// Get follower ID from follower username
+	var followerID int64
+	err = db.DB.QueryRow("SELECT id FROM users WHERE username = ?", followerUsername).Scan(&followerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving follower ID"})
+		return
+	}
+
+	// Get following ID from following username
+	var followingID int64
+	err = db.DB.QueryRow("SELECT id FROM users WHERE username = ?", followingUsername).Scan(&followingID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "User does not exist"})
+		return
+	}
 
 	// Check if the follow relationship exists
 	var followExists bool
@@ -113,5 +139,5 @@ func UnfollowUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Successfully unfollowed user", "following_id": followingID})
+	c.JSON(http.StatusOK, gin.H{"message": "Successfully unfollowed user"})
 }

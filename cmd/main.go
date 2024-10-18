@@ -9,6 +9,7 @@ import (
 	"github.com/vaanskii/vansify/db"
 	auth "github.com/vaanskii/vansify/services/auth"
 	follow "github.com/vaanskii/vansify/services/follow"
+	user "github.com/vaanskii/vansify/services/user"
 )
 
 func main() {
@@ -36,6 +37,9 @@ func main() {
 	// Follow/Unfollow system Routers
 	r.POST("/follow/:username", follow.FollowUser)      
 	r.DELETE("/unfollow/:username", follow.UnfollowUser)
+
+	
+	r.GET("/user/:username", user.GetUserProfile)
 
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
