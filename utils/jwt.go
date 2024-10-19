@@ -9,6 +9,10 @@ import (
 	"github.com/lpernett/godotenv"
 )
 
+type CustomClaims struct {
+	Username   string   `json:"username"`
+	jwt.RegisteredClaims
+}
 
 var jwtSecret []byte
 
@@ -29,9 +33,12 @@ func LoadEnv() error {
 func GenerateJWT(username string) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 
-	claims := &jwt.RegisteredClaims{
-		ExpiresAt: jwt.NewNumericDate(expirationTime),
-		Subject: username,
+	claims := &CustomClaims{
+		Username: username,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			Subject: username,
+		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -48,4 +55,17 @@ func ValidateJWT(tokenString string) (*jwt.RegisteredClaims, error) {
 	} else {
 		return nil, err
 	}
+}
+
+func VerifyJWT(tokenString string) (*jwt.Token, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+	if err != nil {
+        return nil, err
+    }
+    if !token.Valid {
+        return nil, fmt.Errorf("invalid token")
+    }
+    return token, nil
 }
