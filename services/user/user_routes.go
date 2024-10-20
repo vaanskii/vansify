@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vaanskii/vansify/db"
 	"github.com/vaanskii/vansify/models"
+	"github.com/vaanskii/vansify/utils"
 )
 
 // UserProfile holds the user profile details to be returned in the response
@@ -96,4 +97,16 @@ func GetUserByUsername(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, profile)
+}
+
+// Func GetCurrentUser showing user which we are logged in now
+func GetCurrentUser(c *gin.Context) {
+    claims, exists := c.Get("claims")
+    if !exists {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+        return
+    }
+
+    customClaims := claims.(*utils.CustomClaims)
+    c.JSON(http.StatusOK, gin.H{"username": customClaims.Username})
 }
