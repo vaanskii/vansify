@@ -44,8 +44,9 @@ func main() {
 		v1.POST("/create-chat", auth.AuthMiddleware(), chat.CreateChat)
 		v1.GET("/chat/:chatID", auth.AuthMiddleware(), chat.WsHandler)
 		v1.GET("/chat/:chatID/history", auth.AuthMiddleware(), chat.GetChatHistory)
-
+		
 		// User Profile Retrieval
+		v1.GET("/me", auth.AuthMiddleware(), user.GetCurrentUser)
 		v1.GET("/user/:username", user.GetUserByUsername)
 	}
 
