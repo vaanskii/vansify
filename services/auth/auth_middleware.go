@@ -26,11 +26,12 @@ func AuthMiddleware() gin.HandlerFunc{
             return
         }
 		
-		_, err := utils.VerifyJWT(token)
+		claims, err := utils.VerifyJWT(token)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			return
 		}
+		c.Set("claims", claims)
 		c.Next()
 	}
 }
