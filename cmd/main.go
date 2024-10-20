@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vaanskii/vansify/db"
 	auth "github.com/vaanskii/vansify/services/auth"
+	"github.com/vaanskii/vansify/services/chat"
 	follow "github.com/vaanskii/vansify/services/follow"
 	user "github.com/vaanskii/vansify/services/user"
 )
@@ -35,11 +36,14 @@ func main() {
 		v1.GET("/verify", auth.VerifyEmail)
 		v1.DELETE("/delete-account", auth.DeleteUser)
 
-		v1.Use(auth.AuthMiddleware())
-
 		// Follow/Unfollow system Routes
 		v1.POST("/follow/:username", follow.FollowUser)
 		v1.DELETE("/unfollow/:username", follow.UnfollowUser)
+
+		// Chat routes
+		v1.POST("/create-chat", auth.AuthMiddleware(), chat.CreateChat)
+		v1.GET("/chat/:chatID", auth.AuthMiddleware(), chat.WsHandler)
+		v1.GET("/chat/:chatID/history", auth.AuthMiddleware(), chat.GetChatHistory)
 
 		// User Profile Retrieval
 		v1.GET("/user/:username", user.GetUserByUsername)
