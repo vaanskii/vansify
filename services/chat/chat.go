@@ -35,41 +35,65 @@ func generateChatID() (string, error) {
     return hex.EncodeToString(bytes), nil
 }
 
+
+// Creating chat if not exists
 func CreateChat(c *gin.Context) {
-	var chat models.Chat
-	if err := c.ShouldBindJSON(&chat); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+    // Extract claims from context
+    claims, exists := c.Get("claims")
+    if !exists {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
         return
-	}
+    }
+    customClaims := claims.(*utils.CustomClaims)
+    user1 := customClaims.Username
 
-	// Check if chat already exists
-	var existingChat string
-	err := db.DB.QueryRow("SELECT chat_id FROM chats WHERE (user1 = ? or user2 = ?) OR (user1 = ? user2 = ?)",
-		chat.User1, chat.User2, chat.User2, chat.User1).Scan(&existingChat)
-	if err == nil {
-		c.JSON(http.StatusOK, gin.H{"chat_id": existingChat})
-		return
-	} else if err != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking existing chat"})  // Database Error
+    // Bind JSON to chat object
+    var chat models.Chat
+    if err := c.ShouldBindJSON(&chat); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
         return
-	}
+    }
+    chat.User1 = user1  // Automatically set user1 from the authenticated user
 
-	 // if chat does not exist, create a new one
-	chatID, err := generateChatID()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating chat ID"})
-		return
-	}
+    // Check if user2 exists
+    var user2Exists bool
+    err := db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = ?)", chat.User2).Scan(&user2Exists)
+    if err != nil || !user2Exists {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "User2 does not exist"})
+        return
+    }
 
-	chat.ChatID = chatID
-	_, execErr := db.DB.Exec("INSERT INTO chats (chat_id, user1, user2) VALUES (?, ?, ?)", chat.ChatID, chat.User1, chat.User2)
-	if execErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error saving chat to database"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"chat_id": chat.ChatID})
+    // Check if chat already exists
+    var existingChat string
+    err = db.DB.QueryRow("SELECT chat_id FROM chats WHERE (user1 = ? AND user2 = ?) OR (user1 = ? AND user2 = ?)",
+        chat.User1, chat.User2, chat.User2, chat.User1).Scan(&existingChat)
+
+    if err == nil {
+        c.JSON(http.StatusOK, gin.H{"chat_id": existingChat})
+        return
+    } else if err != sql.ErrNoRows {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking existing chat"})
+        return
+    }
+
+    // If chat does not exist, create a new one
+    chatID, err := generateChatID()
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating chat ID"})
+        return
+    }
+    chat.ChatID = chatID
+    _, execErr := db.DB.Exec("INSERT INTO chats (chat_id, user1, user2) VALUES (?, ?, ?)", chat.ChatID, chat.User1, chat.User2)
+    if execErr != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error saving chat to database"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"chat_id": chat.ChatID})
 }
 
+
+// WsHandler which is handling ws connections
 func WsHandler(c *gin.Context) {
 	chatID := c.Param("chatID")
 	token := c.Query("token")
