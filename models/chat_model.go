@@ -3,7 +3,7 @@ package models
 type Message struct {
 	ID 		  int 	   `json:"id"`
 	ChatID    string   `json:"chat_id"`
-	Message   string   `json:"text"`
+	Message   string   `json:"message"`
 	Username  string   `json:"username"`
 }
 
