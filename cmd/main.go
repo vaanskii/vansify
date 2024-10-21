@@ -47,6 +47,7 @@ func main() {
 		
 		// User Profile Retrieval
 		v1.GET("/me", auth.AuthMiddleware(), user.GetCurrentUser)
+		v1.GET("/me/chats", auth.AuthMiddleware(), user.GetUserChats)
 		v1.GET("/user/:username", user.GetUserByUsername)
 	}
 
