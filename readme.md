@@ -22,6 +22,33 @@ go run main.go
 The API will be accessible at http://localhost:8080.
 ```
 
+### Database Setup
+This project uses MySQL as its database. Ensure you have MySQL installed and running. Create a new database and update the database connection settings in your environment variables.
+
+### Running Migrations
+We use the `migrate` tool to manage database migrations. The Makefile simplifies running these migrations.
+
+#### Commands:
+- To create a new migration:
+
+``` 
+migrate create -ext sql -dir 'your-directory-folder-name' 'table-name'
+```
+
+- To run migrations:
+```
+make migrate
+```
+- To apply up migrations:
+``` 
+make up
+```
+- To roll back migrations:
+```
+make down
+```
+
+
 ### Authentication
 For endpoints that require authentication, include the token in the Authorization header using the Bearer scheme:
 #### Header:
