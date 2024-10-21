@@ -108,7 +108,6 @@ Here’s how to test the API endpoints using Postman or any API testing tool:
 
 ### Authorization Routes
 - **POST** `/v1/register`
-#### Request Body:
 ```
 {
     "username": "yourUsername",
@@ -134,9 +133,8 @@ Here’s how to test the API endpoints using Postman or any API testing tool:
 - **POST** `/v1/reset-password`
 ```
 {
-    "token": "yourResetToken", - from
+    "token": "yourResetToken",
     "new_password": "yourNewPassword"
 }
 
 ```
-
