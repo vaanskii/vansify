@@ -29,6 +29,7 @@ type Following struct {
 	Username string `json:"username"`
 }
 
+// GetUserByUsername function geting user by username
 func GetUserByUsername(c *gin.Context) {
 	username := c.Param("username")
 
@@ -111,6 +112,8 @@ func GetCurrentUser(c *gin.Context) {
     c.JSON(http.StatusOK, gin.H{"username": customClaims.Username})
 }
 
+
+// GetUserChats function fetching logged in users chats
 func GetUserChats(c *gin.Context) {
 	claims, exists := c.Get("claims")
 	if !exists {
