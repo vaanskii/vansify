@@ -34,7 +34,7 @@ func main() {
 		v1.POST("/register", auth.RegisterUser)
 		v1.POST("/login", auth.LoginUser)
 		v1.GET("/verify", auth.VerifyEmail)
-		v1.DELETE("/delete-account", auth.DeleteUser)
+		v1.DELETE("/delete-account", auth.AuthMiddleware(), auth.DeleteUser)
 
 		// Follow/Unfollow system Routes
 		v1.POST("/follow/:username", follow.FollowUser)

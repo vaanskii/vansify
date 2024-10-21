@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/lpernett/godotenv"
@@ -157,37 +156,29 @@ func LoginUser(c *gin.Context) {
 
 // Delete user function
 func DeleteUser(c *gin.Context) {
-	// Extract the token from the Authorization header
-	tokenString := c.GetHeader("Authorization")
-	if tokenString == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization token is required"})
-		return
-	}
+    // Retrieve the claims from the context set by the middleware
+    claims, exists := c.Get("claims")
+    if !exists {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "No claims found"})
+        return
+    }
 
-	// Remove the "Bearer " prefix from the token
-	tokenParts := strings.Split(tokenString, " ")
-	if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header format"})
-		return
-	}
+    // Assuming claims is of type *utils.CustomClaims
+    customClaims, ok := claims.(*utils.CustomClaims)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+        return
+    }
 
-	tokenString = tokenParts[1]
+    // Get username from claims
+    username := customClaims.Username
 
-	// Validate the token
-	claims, err := utils.ValidateJWT(tokenString)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-		return
-	}
-	// Get user id from claims
-	username := claims.Subject
-	
-	// Delete the user from the database
-	_, err = db.DB.Exec("DELETE FROM users WHERE username = ?", username)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting user account"})
-		return 
-	}
+    // Delete the user from the database
+    _, err := db.DB.Exec("DELETE FROM users WHERE username = ?", username)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting user account"})
+        return
+    }
 
-	c.JSON(http.StatusOK, gin.H{"message": "Account deleted successfully"})
+    c.JSON(http.StatusOK, gin.H{"message": "Account deleted successfully"})
 }
