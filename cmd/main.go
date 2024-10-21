@@ -37,8 +37,8 @@ func main() {
 		v1.DELETE("/delete-account", auth.AuthMiddleware(), auth.DeleteUser)
 
 		// Follow/Unfollow system Routes
-		v1.POST("/follow/:username", follow.FollowUser)
-		v1.DELETE("/unfollow/:username", follow.UnfollowUser)
+		v1.POST("/follow/:username", auth.AuthMiddleware(), follow.FollowUser)
+		v1.DELETE("/unfollow/:username", auth.AuthMiddleware(),follow.UnfollowUser)
 
 		// Chat routes
 		v1.POST("/create-chat", auth.AuthMiddleware(), chat.CreateChat)
