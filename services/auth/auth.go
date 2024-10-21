@@ -119,14 +119,18 @@ func RegisterUser(c *gin.Context) {
 
 // LoginUser handles user login
 func LoginUser(c *gin.Context) {
-    var user models.User
-    if err := c.ShouldBindJSON(&user); err != nil {
+    var request struct {
+        Username   string `json:"username"`
+        Password   string `json:"password"`
+        RememberMe bool   `json:"remember_me"`
+    }
+    if err := c.ShouldBindJSON(&request); err != nil {
         c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
         return
     }
 
     // Check if user exists
-    row := db.DB.QueryRow("SELECT id, password, verified FROM users WHERE username = ?", user.Username) 
+    row := db.DB.QueryRow("SELECT id, password, verified FROM users WHERE username = ?", request.Username)
     var dbUser models.User
     if err := row.Scan(&dbUser.ID, &dbUser.Password, &dbUser.Verified); err != nil {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
@@ -134,25 +138,37 @@ func LoginUser(c *gin.Context) {
     }
 
     // Check password
-    if !dbUser.CheckPassword(user.Password) {
+    if !dbUser.CheckPassword(request.Password) {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
         return
     }
-
     if !dbUser.Verified { // Check if verified
         c.JSON(http.StatusForbidden, gin.H{"error": "Please verify your email before logging in."})
         return
     }
 
-    // Generate JWT
-    token, err := utils.GenerateJWT(user.Username)
+    // Generate token based on "Remember Me" option
+    var token string
+    var err error
+    if request.RememberMe {
+        token, err = utils.GenerateRememberMeToken(request.Username)
+    } else {
+        token, err = utils.GenerateJWT(request.Username)
+    }
+
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating token"})
         return
     }
 
+    // Set the token in a cookie if "Remember Me" is checked
+    if request.RememberMe {
+        c.SetCookie("remember_me_token", token, 30*24*3600, "/", "", false, true)
+    }
+
     c.JSON(http.StatusOK, gin.H{"token": token})
 }
+
 
 // Delete user function
 func DeleteUser(c *gin.Context) {

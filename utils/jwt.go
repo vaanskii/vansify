@@ -40,7 +40,20 @@ func GenerateJWT(username string) (string, error) {
 			Subject: username,
 		},
 	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtSecret)
+}
+// GenerateRememberMeToken generates a long-lived JWT token for a user
+func GenerateRememberMeToken(username string) (string, error) {
+	expirationTime := time.Now().Add(30 * 24 * time.Hour)
 
+	claims := &CustomClaims{
+		Username: username,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			Subject: username,
+		},
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(jwtSecret)
 }
