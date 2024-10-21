@@ -15,10 +15,20 @@ import (
 
 func main() {
 	db.ConnectToDatabase()
-	// db.CreateTable()  if i want to make migrations automatically. now am using makefile migrations for it.
 
 	r := gin.Default()
 
+	// Enable global handling of Method Not Allowed
+    r.HandleMethodNotAllowed = true
+
+    // Handle non-existent and incorrect methods routes
+    r.NoRoute(func(c *gin.Context) {
+        c.JSON(http.StatusNotFound, gin.H{"error": "Page Not Found"})
+    })
+    r.NoMethod(func(c *gin.Context) {
+        c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "Method Not Allowed"})
+    })
+	
 	r.Use(cors.New(cors.Config{
 		AllowAllOrigins:  true,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
