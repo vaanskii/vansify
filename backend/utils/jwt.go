@@ -2,9 +2,11 @@ package utils
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/lpernett/godotenv"
 )
@@ -79,4 +81,28 @@ func VerifyJWT(tokenString string) (*jwt.Token, error) {
         return nil, fmt.Errorf("invalid token")
     }
     return token, nil
+}
+
+
+// RefreshToken handles refreshing the access token
+func RefreshToken(c *gin.Context) {
+    var request struct {
+        RefreshToken string `json:"refresh_token"`
+    }
+    if err := c.ShouldBindJSON(&request); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+        return
+    }
+    claims, err := ValidateToken(request.RefreshToken)
+    if err != nil {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired refresh token"})
+        return
+    }
+    accessToken, err := GenerateAccessToken(claims.Subject)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating access token"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"access_token": accessToken})
 }

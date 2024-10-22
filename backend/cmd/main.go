@@ -11,6 +11,7 @@ import (
 	"github.com/vaanskii/vansify/services/chat"
 	follow "github.com/vaanskii/vansify/services/follow"
 	user "github.com/vaanskii/vansify/services/user"
+	"github.com/vaanskii/vansify/utils"
 )
 
 func main() {
@@ -49,7 +50,7 @@ func main() {
 		v1.POST("/reset-password", auth.ResetPassword)
 
 		// refresh token 
-		v1.POST("/refresh-token", auth.RefreshToken)
+		v1.POST("/refresh-token", utils.RefreshToken)
 
 		// Follow/Unfollow system Routes
 		v1.POST("/follow/:username", auth.AuthMiddleware(), follow.FollowUser)

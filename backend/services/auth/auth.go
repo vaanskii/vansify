@@ -38,29 +38,6 @@ func sendVerificationEmail(email string, token string) error {
 	return nil
 }
 
-// RefreshToken handles refreshing the access token
-func RefreshToken(c *gin.Context) {
-    var request struct {
-        RefreshToken string `json:"refresh_token"`
-    }
-    if err := c.ShouldBindJSON(&request); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
-        return
-    }
-    claims, err := utils.ValidateToken(request.RefreshToken)
-    if err != nil {
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired refresh token"})
-        return
-    }
-    accessToken, err := utils.GenerateAccessToken(claims.Subject)
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating access token"})
-        return
-    }
-
-    c.JSON(http.StatusOK, gin.H{"access_token": accessToken})
-}
-
 // RegisterUser handles user registration
 func RegisterUser(c *gin.Context) {
 	var user models.User
