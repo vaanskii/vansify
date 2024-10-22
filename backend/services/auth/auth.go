@@ -38,6 +38,29 @@ func sendVerificationEmail(email string, token string) error {
 	return nil
 }
 
+// RefreshToken handles refreshing the access token
+func RefreshToken(c *gin.Context) {
+    var request struct {
+        RefreshToken string `json:"refresh_token"`
+    }
+    if err := c.ShouldBindJSON(&request); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+        return
+    }
+    claims, err := utils.ValidateToken(request.RefreshToken)
+    if err != nil {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired refresh token"})
+        return
+    }
+    accessToken, err := utils.GenerateAccessToken(claims.Subject)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating access token"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"access_token": accessToken})
+}
+
 // RegisterUser handles user registration
 func RegisterUser(c *gin.Context) {
 	var user models.User
@@ -125,18 +148,16 @@ func LoginUser(c *gin.Context) {
         RememberMe bool   `json:"remember_me"`
     }
     if err := c.ShouldBindJSON(&request); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
         return
     }
-
     // Check if user exists
-    row := db.DB.QueryRow("SELECT id, password, verified FROM users WHERE username = ?", request.Username)
+    row := db.DB.QueryRow("SELECT id, username, email, password, verified FROM users WHERE username = ?", request.Username)
     var dbUser models.User
-    if err := row.Scan(&dbUser.ID, &dbUser.Password, &dbUser.Verified); err != nil {
+    if err := row.Scan(&dbUser.ID, &dbUser.Username, &dbUser.Email, &dbUser.Password, &dbUser.Verified); err != nil {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
         return
     }
-
     // Check password
     if !dbUser.CheckPassword(request.Password) {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
@@ -146,29 +167,32 @@ func LoginUser(c *gin.Context) {
         c.JSON(http.StatusForbidden, gin.H{"error": "Please verify your email before logging in."})
         return
     }
-
-    // Generate token based on "Remember Me" option
-    var token string
-    var err error
-    if request.RememberMe {
-        token, err = utils.GenerateRememberMeToken(request.Username)
-    } else {
-        token, err = utils.GenerateJWT(request.Username)
-    }
-
+    // Generate tokens
+    accessToken, err := utils.GenerateAccessToken(request.Username)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating token"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating access token"})
+        return
+    }
+    refreshToken, err := utils.GenerateRefreshToken(request.Username)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating refresh token"})
         return
     }
 
-    // Set the token in a cookie if "Remember Me" is checked
+    // Set refresh token in a cookie if "Remember Me" is checked
     if request.RememberMe {
-        c.SetCookie("remember_me_token", token, 30*24*3600, "/", "", false, true)
+        c.SetCookie("refresh_token", refreshToken, 7*24*3600, "/", "", false, true)
     }
 
-    c.JSON(http.StatusOK, gin.H{"token": token})
+    // Include user details in the response
+    c.JSON(http.StatusOK, gin.H{
+        "access_token": accessToken,
+        "refresh_token": refreshToken,
+        "id": dbUser.ID,
+        "username": dbUser.Username,
+        "email": dbUser.Email,
+    })
 }
-
 
 // Delete user function
 func DeleteUser(c *gin.Context) {

@@ -48,6 +48,8 @@ func main() {
 		v1.POST("/forgot-password", auth.ForgotPassword)
 		v1.POST("/reset-password", auth.ResetPassword)
 
+		// refresh token 
+		v1.POST("/refresh-token", auth.RefreshToken)
 
 		// Follow/Unfollow system Routes
 		v1.POST("/follow/:username", auth.AuthMiddleware(), follow.FollowUser)

@@ -29,46 +29,44 @@ func LoadEnv() error {
 	return nil
 }
 
-// GenerateJWT generates a JWT token for a user
-func GenerateJWT(username string) (string, error) {
-	expirationTime := time.Now().Add(24 * time.Hour)
-
-	claims := &CustomClaims{
-		Username: username,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
-			Subject: username,
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
-}
-// GenerateRememberMeToken generates a long-lived JWT token for a user
-func GenerateRememberMeToken(username string) (string, error) {
-	expirationTime := time.Now().Add(30 * 24 * time.Hour)
-
-	claims := &CustomClaims{
-		Username: username,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
-			Subject: username,
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
+// GenerateAccessToken generates a short-lived JWT access token for a user
+func GenerateAccessToken(username string) (string, error) {
+    expirationTime := time.Now().Add(15 * time.Minute)
+    claims := &CustomClaims{
+        Username: username,
+        RegisteredClaims: jwt.RegisteredClaims{
+            ExpiresAt: jwt.NewNumericDate(expirationTime),
+            Subject:   username,
+        },
+    }
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+    return token.SignedString(jwtSecret)
 }
 
-// ValidateJWT validates the token
-func ValidateJWT(tokenString string) (*jwt.RegisteredClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(t *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil
-	})
-	if claims, ok := token.Claims.(*jwt.RegisteredClaims); ok && token.Valid {
-		return claims, nil
-	} else {
-		return nil, err
-	}
+// GenerateRefreshToken generates a long-lived JWT refresh token for a user
+func GenerateRefreshToken(username string) (string, error) {
+    expirationTime := time.Now().Add(7 * 24 * time.Hour)
+    claims := &CustomClaims{
+        Username: username,
+        RegisteredClaims: jwt.RegisteredClaims{
+            ExpiresAt: jwt.NewNumericDate(expirationTime),
+            Subject:   username,
+        },
+    }
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+    return token.SignedString(jwtSecret)
 }
+// ValidateToken validates the token and returns the claims
+func ValidateToken(tokenString string) (*jwt.RegisteredClaims, error) {
+    token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(t *jwt.Token) (interface{}, error) {
+        return jwtSecret, nil
+    })
+    if claims, ok := token.Claims.(*jwt.RegisteredClaims); ok && token.Valid {
+        return claims, nil
+    }
+    return nil, err
+}
+
 
 func VerifyJWT(tokenString string) (*jwt.Token, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
