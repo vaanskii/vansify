@@ -38,7 +38,7 @@ const store = userStore();
 
 const login = async () => {
   try {
-    const response = await axios.post('http://localhost:8080/v1/login', {
+    const response = await axios.post('/v1/login', {
       username: username.value,
       password: password.value,
       remember_me: rememberMe.value,

@@ -51,6 +51,17 @@ func RegisterUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Username is required"})
 		return
 	}
+
+	if user.Gender != "male" && user.Gender != "female" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid gender value"})
+        return
+	}
+
+	if user.Gender == "male" {
+		user.ProfilePicture = "assets/images/man-picture.jpg"
+	} else {
+		user.ProfilePicture = "assets/images/woman-picture.jpg"
+	}
 	
 	if user.Password == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Password is required"})
@@ -98,7 +109,8 @@ func RegisterUser(c *gin.Context) {
 	user.Verified = false
 
 	// Save user to the database
-	_, err = db.DB.Exec("INSERT INTO users (username, password, email, verified) VALUES (?, ?, ?, ?)", user.Username, user.Password, user.Email, user.Verified)
+	_, err = db.DB.Exec("INSERT INTO users (username, password, email, profile_picture, gender, verified) VALUES (?, ?, ?, ?, ?, ?)", 
+		user.Username, user.Password, user.Email, user.ProfilePicture, user.Gender, user.Verified)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error saving user to database"})
 		return
@@ -168,6 +180,8 @@ func LoginUser(c *gin.Context) {
         "id": dbUser.ID,
         "username": dbUser.Username,
         "email": dbUser.Email,
+		"profile_picture": dbUser.ProfilePicture,
+		"gender": dbUser.Gender,
     })
 }
 

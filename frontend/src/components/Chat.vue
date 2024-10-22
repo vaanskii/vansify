@@ -17,8 +17,8 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import axios from 'axios';
 import { useRoute } from 'vue-router';
 import { userStore } from '@/stores/user';
-import { useWebSocket } from '@vueuse/core';
 
+const apiUrl = import.meta.env.VITE_WS_URL;
 const messages = ref([]);
 const newMessage = ref('');
 const route = useRoute();
@@ -46,9 +46,7 @@ onMounted(async () => {
   if (chatID && token) {
     // Fetch chat history
     try {
-      const response = await axios.get(`http://localhost:8080/v1/chat/${chatID}/history`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await axios.get(`/v1/chat/${chatID}/history`)
       if (response.data) {
         messages.value = response.data.map(message => {
           if (message.username === username) {
@@ -64,7 +62,8 @@ onMounted(async () => {
     // Set chatUser from route query or any other source
     chatUser.value = route.query.user || 'Unknown';
 
-    const wsURL = `ws://localhost:8080/v1/chat/${chatID}?token=${encodeURIComponent(token)}`;
+    // const wsURL = `ws://localhost:8080/v1/chat/${chatID}?token=${encodeURIComponent(token)}`;
+    const wsURL = `ws://${apiUrl}/v1/chat/${chatID}?token=${encodeURIComponent(token)}`;
     ws = new WebSocket(wsURL);
 
     console.log(`WebSocket URL: ${wsURL}`);

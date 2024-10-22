@@ -39,6 +39,8 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	r.Static("/assets", "./assets")
+
 	v1 := r.Group("/v1")
 	{
 		// Authorization Routes
