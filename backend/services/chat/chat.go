@@ -183,3 +183,21 @@ func GetChatHistory(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, messages)
 }
+
+func CheckChatExists(c *gin.Context) {
+	user1 := c.Param("user1")
+	user2 := c.Param("user2")
+  
+	var chatID string
+	err := db.DB.QueryRow("SELECT chat_id FROM chats WHERE (user1 = ? AND user2 = ?) OR (user1 = ? AND user2 = ?)", user1, user2, user2, user1).Scan(&chatID)
+	if err != nil {
+	  if err == sql.ErrNoRows {
+		c.JSON(http.StatusOK, gin.H{"chat_id": ""})
+	  } else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking chat existence"})
+	  }
+	  return
+	}
+  
+	c.JSON(http.StatusOK, gin.H{"chat_id": chatID})
+  }

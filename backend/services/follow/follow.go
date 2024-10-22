@@ -133,3 +133,26 @@ func UnfollowUser(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Successfully unfollowed user"})
 }
+
+func CheckFollowStatus(c *gin.Context) {
+    followerUsername := c.Param("follower")
+    followingUsername := c.Param("following")
+    var followerID, followingID int64
+
+    if err := db.DB.QueryRow("SELECT id FROM users WHERE username = ?", followerUsername).Scan(&followerID); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Follower not found"})
+        return
+    }
+    if err := db.DB.QueryRow("SELECT id FROM users WHERE username = ?", followingUsername).Scan(&followingID); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Following user not found"})
+        return
+    }
+
+    var followExists bool
+    if err := db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_id = ? AND following_id = ?)", followerID, followingID).Scan(&followExists); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking follow status"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"is_following": followExists})
+}
