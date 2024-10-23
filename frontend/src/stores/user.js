@@ -26,8 +26,6 @@ export const userStore = defineStore({
         this.user.id = localStorage.getItem("id");
         this.user.username = localStorage.getItem("username");
         this.user.email = localStorage.getItem("email");
-        this.user.profile_picture = localStorage.getItem("profile_picture");
-        this.user.gender = localStorage.getItem("gender");
         this.user.isAuthenticated = true;
         axios.defaults.headers.common["Authorization"] = "Bearer " + this.user.access;
         console.log("Access and refresh tokens found. Starting refresh token timer.");
@@ -40,16 +38,14 @@ export const userStore = defineStore({
       this.user.id = data.id;
       this.user.username = data.username;
       this.user.email = data.email;
-      this.user.profile_picture = data.profile_picture;
-      this.user.gender = data.gender;
+      this.user.profile_picture = data.profile_picture; // Not stored in localStorage
+      this.user.gender = data.gender; // Not stored in localStorage
       this.user.isAuthenticated = true;
       localStorage.setItem("user.access", data.access);
       localStorage.setItem("user.refresh", data.refresh);
       localStorage.setItem("id", data.id);
       localStorage.setItem("username", data.username);
       localStorage.setItem("email", data.email);
-      localStorage.setItem("profile_picture", data.profile_picture);
-      localStorage.setItem("gender", data.gender);
       this.startRefreshTokenTimer();
     },
     removeToken() {
