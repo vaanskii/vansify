@@ -140,22 +140,26 @@ func LoginUser(c *gin.Context) {
         c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
         return
     }
+
     // Check if user exists
-    row := db.DB.QueryRow("SELECT id, username, email, password, verified FROM users WHERE username = ?", request.Username)
+    row := db.DB.QueryRow("SELECT id, username, email, password, verified, profile_picture, gender FROM users WHERE username = ?", request.Username)
     var dbUser models.User
-    if err := row.Scan(&dbUser.ID, &dbUser.Username, &dbUser.Email, &dbUser.Password, &dbUser.Verified); err != nil {
+    if err := row.Scan(&dbUser.ID, &dbUser.Username, &dbUser.Email, &dbUser.Password, &dbUser.Verified, &dbUser.ProfilePicture, &dbUser.Gender); err != nil {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
         return
     }
+
     // Check password
     if !dbUser.CheckPassword(request.Password) {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
         return
     }
+
     if !dbUser.Verified { // Check if verified
         c.JSON(http.StatusForbidden, gin.H{"error": "Please verify your email before logging in."})
         return
     }
+
     // Generate tokens
     accessToken, err := utils.GenerateAccessToken(request.Username)
     if err != nil {
@@ -180,10 +184,11 @@ func LoginUser(c *gin.Context) {
         "id": dbUser.ID,
         "username": dbUser.Username,
         "email": dbUser.Email,
-		"profile_picture": dbUser.ProfilePicture,
-		"gender": dbUser.Gender,
+        "profile_picture": dbUser.ProfilePicture,
+        "gender": dbUser.Gender,
     })
 }
+
 
 // Delete user function
 func DeleteUser(c *gin.Context) {
