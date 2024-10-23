@@ -66,7 +66,6 @@ func main() {
 		v1.GET("/check-chat/:user1/:user2", auth.AuthMiddleware(), chat.CheckChatExists)
 		
 		// User Profile Retrieval
-		v1.GET("/me", auth.AuthMiddleware(), user.GetCurrentUser)
 		v1.GET("/me/chats", auth.AuthMiddleware(), user.GetUserChats)
 		v1.GET("/user/:username", user.GetUserByUsername)
 	}
