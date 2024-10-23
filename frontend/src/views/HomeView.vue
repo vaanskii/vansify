@@ -2,6 +2,7 @@
   <div>
     <button v-if="store.user.isAuthenticated" @click="logout">Logout</button>
     <button v-if="store.user.isAuthenticated" @click="goToChats">My Chats</button>
+    <button v-if="store.user.isAuthenticated" @click="goToProfile">My Profile</button>
     <div v-else>
       <button @click="goToLogin">Login</button>
       <button @click="goToRegister">Register</button>
@@ -22,7 +23,11 @@ const logout = () => {
 };
 
 const goToChats = () => {
-  router.push('/chat/inbox');
+  router.push('/inbox');
+};
+
+const goToProfile = () => {
+  router.push(`/${store.user.username}`);
 };
 
 const goToLogin = () => {

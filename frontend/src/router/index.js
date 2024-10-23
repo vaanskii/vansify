@@ -37,7 +37,7 @@ const routes = [
     component: ProfileView,
   },
   {
-    path: '/chat/:chatID',
+    path: '/inbox/:chatID',
     name: 'chat',
     component: Chat,
     meta: {
@@ -45,7 +45,7 @@ const routes = [
     }
   },
   {
-    path: '/chat/inbox',
+    path: '/inbox',
     name: 'chatlist',
     component: ChatListView,
     meta: {
