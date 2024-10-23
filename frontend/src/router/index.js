@@ -3,7 +3,8 @@ import HomeView from '../views/HomeView.vue';
 import LoginView from '../views/LoginView.vue';
 import RegisterView from '../views/RegisterView.vue';
 import ProfileView from '../views/ProfileView.vue';
-import Chat from '../components/Chat.vue';
+import Chat from '../views/Chat.vue';
+import ChatListView from '../views/ChatListView.vue';
 
 const routes = [
   {
@@ -39,6 +40,14 @@ const routes = [
     path: '/chat/:chatID',
     name: 'chat',
     component: Chat,
+    meta: {
+      title: 'Chat'
+    }
+  },
+  {
+    path: '/chat/inbox',
+    name: 'chatlist',
+    component: ChatListView,
     meta: {
       title: 'Chat'
     }

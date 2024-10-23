@@ -40,17 +40,15 @@ const formattedMessages = computed(() => {
 
 onMounted(async () => {
   const token = store.user.access;
-  console.log('Token used for WebSocket:', token);
   const chatID = route.params.chatID;
 
   if (chatID && token) {
-    // Fetch chat history
     try {
       const response = await axios.get(`/v1/chat/${chatID}/history`)
       if (response.data) {
         messages.value = response.data.map(message => {
           if (message.username === username) {
-            message.username = ''; // Set username to an empty string for your own messages
+            message.username = '';
           }
           return message;
         });
@@ -59,14 +57,10 @@ onMounted(async () => {
       console.error('Error fetching chat history:', error);
     }
 
-    // Set chatUser from route query or any other source
     chatUser.value = route.query.user || 'Unknown';
 
-    // const wsURL = `ws://localhost:8080/v1/chat/${chatID}?token=${encodeURIComponent(token)}`;
     const wsURL = `ws://${apiUrl}/v1/chat/${chatID}?token=${encodeURIComponent(token)}`;
     ws = new WebSocket(wsURL);
-
-    console.log(`WebSocket URL: ${wsURL}`);
 
     ws.onopen = () => {
       console.log('WebSocket connection established');
@@ -84,7 +78,7 @@ onMounted(async () => {
       try {
         const message = JSON.parse(event.data);
         if (message.username === username) {
-          message.username = ''; // Set username to an empty string for your own messages
+          message.username = '';
         }
         messages.value.push(message);
       } catch (e) {

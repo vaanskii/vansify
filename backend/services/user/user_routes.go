@@ -100,37 +100,35 @@ func GetUserByUsername(c *gin.Context) {
     c.JSON(http.StatusOK, profile)
 }
 
-// GetUserChats function fetching logged in users chats
 func GetUserChats(c *gin.Context) {
-	claims, exists := c.Get("claims")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-		return
-	}
-	customClaims := claims.(*utils.CustomClaims)
-	username := customClaims.Username
+    claims, exists := c.Get("claims")
+    if !exists {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+        return
+    }
+    customClaims := claims.(*utils.CustomClaims)
+    username := customClaims.Username
 
-	rows, err := db.DB.Query("SELECT user1, user2 FROM chats WHERE user1 = ? OR user2 = ?", username, username)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching user chats"})
-		return
-	}
-	defer rows.Close()
+    rows, err := db.DB.Query("SELECT chat_id, user1, user2 FROM chats WHERE user1 = ? OR user2 = ?", username, username)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching user chats"})
+        return
+    }
+    defer rows.Close()
 
-	var userChats []string
-	for rows.Next() {
-		var user1, user2 string
-		if err := rows.Scan(&user1, &user2); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning chat"})
+    var chats []map[string]string
+    for rows.Next() {
+        var chatID, user1, user2 string
+        if err := rows.Scan(&chatID, &user1, &user2); err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning chat"})
             return
-		}
+        }
+        otherUser := user1
+        if user1 == username {
+            otherUser = user2
+        }
+        chats = append(chats, map[string]string{"chat_id": chatID, "user": otherUser})
+    }
 
-		// check if we only return the other user's info
-		if user1 == username {
-			userChats = append(userChats, user2)
-		} else {
-			userChats = append(userChats, user1)
-		}
-	}
-	c.JSON(http.StatusOK, gin.H{"chats": userChats})
+    c.JSON(http.StatusOK, gin.H{"chats": chats})
 }

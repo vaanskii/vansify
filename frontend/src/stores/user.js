@@ -17,7 +17,6 @@ export const userStore = defineStore({
   }),
   actions: {
     initStore() {
-      console.log("Initializing store...");
       const access = localStorage.getItem("user.access");
       const refresh = localStorage.getItem("user.refresh");
       if (access && refresh) {
@@ -28,7 +27,6 @@ export const userStore = defineStore({
         this.user.email = localStorage.getItem("email");
         this.user.isAuthenticated = true;
         axios.defaults.headers.common["Authorization"] = "Bearer " + this.user.access;
-        console.log("Access and refresh tokens found. Starting refresh token timer.");
         this.startRefreshTokenTimer();
       }
     },
@@ -62,11 +60,9 @@ export const userStore = defineStore({
     },
     async refreshToken() {
       try {
-        console.log("Refreshing token...");
         const response = await axios.post("http://localhost:8080/v1/refresh-token", {
           refresh_token: this.user.refresh,
         });
-        console.log("New Access Token:", response.data.access_token);
         this.user.access = response.data.access_token;
         localStorage.setItem("user.access", response.data.access_token);
         axios.defaults.headers.common["Authorization"] = "Bearer " + response.data.access_token;

@@ -200,4 +200,4 @@ func CheckChatExists(c *gin.Context) {
 	}
   
 	c.JSON(http.StatusOK, gin.H{"chat_id": chatID})
-  }
+}

@@ -57,9 +57,6 @@ const register = async () => {
       email: email.value,
       gender: gender.value 
     });
-
-    console.log(response.data.message);
-    // Handle success
     message.value = response.data.message;
   } catch (err) {
     error.value = err.response ? err.response.data.error : 'An error occurred';

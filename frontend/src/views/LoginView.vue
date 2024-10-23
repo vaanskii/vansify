@@ -55,11 +55,7 @@ const login = async () => {
       username: response.data.username,
       email: response.data.email,
     });
-
-    // Set Authorization header for future requests
-    axios.defaults.headers.common['Authorization'] = 'Bearer ' + accessToken;
-
-    // Redirect to another page or show success message
+    
     router.push('/');
   } catch (err) {
     error.value = err.response ? err.response.data.error : 'An error occurred';
