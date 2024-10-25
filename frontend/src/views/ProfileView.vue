@@ -4,14 +4,40 @@
     <div v-if="userFound">
       <img class="image" :src="user.profile_picture" alt="Profile Picture" />
       <p><strong>Gender:</strong> {{ user.gender }}</p>
-      <p><strong>Followers:</strong> {{ user.followers_count }}</p>
-      <p><strong>Followings:</strong> {{ user.followings_count }}</p>
+      <p>
+        <strong>Followers:</strong> 
+        <button @click="toggleFollowers">{{ user.followers_count }}</button>
+      </p>
+      <p>
+        <strong>Followings:</strong> 
+        <button @click="toggleFollowings">{{ user.followings_count }}</button>
+      </p>
       <button v-if="!isCurrentUser" @click="toggleFollow">
         {{ isFollowing ? 'Unfollow' : 'Follow' }}
       </button>
       <button v-if="!isCurrentUser && isAuthenticated" @click="handleChat">
         Chat
       </button>
+      <!-- Followers List -->
+      <div v-if="showFollowers">
+        <h3>Followers</h3>
+        <ul>
+          <li v-for="follower in followers" :key="follower.username">
+            <img :src="follower.profile_picture" alt="Profile Picture" class="small-image" />
+            <span @click="goToProfile(follower.username)">{{ follower.username }}</span>
+          </li>
+        </ul>
+      </div>
+      <!-- Followings List -->
+      <div v-if="showFollowings">
+        <h3>Followings</h3>
+        <ul>
+          <li v-for="following in followings" :key="following.username">
+            <img :src="following.profile_picture" alt="Profile Picture" class="small-image" />
+            <span @click="goToProfile(following.username)">{{ following.username }}</span>
+          </li>
+        </ul>
+      </div>
     </div>
     <div v-else>
       <p>User not found.</p>
@@ -22,8 +48,9 @@
   </div>
 </template>
 
+
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { userStore } from '@/stores/user';
@@ -33,9 +60,54 @@ const router = useRouter();
 const store = userStore();
 const isAuthenticated = ref(store.user.isAuthenticated);
 const userFound = ref(true);
-const user = ref({ id: '', username: '', profile_picture: '', gender: '', followers_count: 0, followings_count: 0 });
+const user = ref({
+  id: '',
+  username: '',
+  profile_picture: '',
+  gender: '',
+  followers_count: 0,
+  followings_count: 0,
+});
 const isCurrentUser = ref(false);
 const isFollowing = ref(false);
+const showFollowers = ref(false);
+const showFollowings = ref(false);
+const followers = ref([]);
+const followings = ref([]);
+
+// Fetch followers for current or other user
+const fetchFollowers = async (username) => {
+  try {
+    const response = await axios.get(`/v1/followers/${username}`);
+    followers.value = response.data.followers;
+  } catch (error) {
+    console.error('Error fetching followers:', error);
+  }
+};
+
+// Fetch followings for current or other user
+const fetchFollowings = async (username) => {
+  try {
+    const response = await axios.get(`/v1/following/${username}`);
+    followings.value = response.data.followings;
+  } catch (error) {
+    console.error('Error fetching followings:', error);
+  }
+};
+
+const toggleFollowers = async () => {
+  showFollowers.value = !showFollowers.value;
+  if (showFollowers.value) {
+    await fetchFollowers(user.value.username);
+  }
+};
+
+const toggleFollowings = async () => {
+  showFollowings.value = !showFollowings.value;
+  if (showFollowings.value) {
+    await fetchFollowings(user.value.username);
+  }
+};
 
 const updateFollowCount = (increment) => {
   if (increment) {
@@ -50,7 +122,6 @@ onMounted(async () => {
   const username = route.params.username;
   const loggedInUsername = localStorage.getItem('username');
   isCurrentUser.value = username === loggedInUsername;
-
   try {
     // Fetch user details
     const response = await axios.get(`/v1/user/${username}`);
@@ -60,9 +131,34 @@ onMounted(async () => {
     isFollowing.value = followStatusResponse.data.is_following;
   } catch (error) {
     console.error('Error fetching user details or follow status:', error);
-    userFound.value = false; 
+    userFound.value = false;
   }
 });
+
+watch(route, async (newRoute) => {
+  if (isAuthenticated.value) {
+    const username = newRoute.params.username;
+    const loggedInUsername = localStorage.getItem('username');
+    isCurrentUser.value = username === loggedInUsername;
+    try {
+      // Fetch user details
+      const response = await axios.get(`/v1/user/${username}`);
+      user.value = response.data;
+      // Check follow status
+      const followStatusResponse = await axios.get(`/v1/is-following/${loggedInUsername}/${username}`);
+      isFollowing.value = followStatusResponse.data.is_following;
+      await fetchFollowers(username);  // Fetch followers for the new user
+      await fetchFollowings(username); // Fetch followings for the new user
+    } catch (error) {
+      console.error('Error fetching user details or follow status:', error);
+      userFound.value = false;
+    }
+  }
+});
+
+const goToProfile = (username) => {
+  router.push({ path: `/${username}` });
+};
 
 const toggleFollow = async () => {
   try {
@@ -83,7 +179,6 @@ const handleChat = async () => {
   try {
     // Check if chat exists
     const chatExistsResponse = await axios.get(`/v1/check-chat/${store.user.username}/${user.value.username}`);
-    
     // If chat exists, redirect to chat
     if (chatExistsResponse.data.chat_id) {
       router.push({ path: `/inbox/${chatExistsResponse.data.chat_id}`, query: { user: user.value.username } });
@@ -105,5 +200,19 @@ const handleChat = async () => {
   .image {
     width: 150px;
     height: 150px;
+  }
+</style>
+
+
+<style scoped>
+  .image {
+    width: 150px;
+    height: 150px;
+  }
+  .small-image {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    margin-right: 10px;
   }
 </style>

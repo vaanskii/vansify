@@ -36,8 +36,8 @@ export const userStore = defineStore({
       this.user.id = data.id;
       this.user.username = data.username;
       this.user.email = data.email;
-      this.user.profile_picture = data.profile_picture; // Not stored in localStorage
-      this.user.gender = data.gender; // Not stored in localStorage
+      this.user.profile_picture = data.profile_picture;
+      this.user.gender = data.gender;
       this.user.isAuthenticated = true;
       localStorage.setItem("user.access", data.access);
       localStorage.setItem("user.refresh", data.refresh);
@@ -75,7 +75,7 @@ export const userStore = defineStore({
     startRefreshTokenTimer() {
       const jwtToken = JSON.parse(atob(this.user.access.split(".")[1]));
       const expires = new Date(jwtToken.exp * 1000);
-      const timeout = expires.getTime() - Date.now() - 60 * 1000; // Adjust for test
+      const timeout = expires.getTime() - Date.now() - 60 * 1000;
       console.log("Setting refresh timer for:", timeout / 1000, "seconds");
       this.refreshTokenTimeout = setTimeout(this.refreshToken, timeout);
     },
