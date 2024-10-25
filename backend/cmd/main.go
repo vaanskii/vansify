@@ -58,6 +58,9 @@ func main() {
 		v1.POST("/follow/:username", auth.AuthMiddleware(), follow.FollowUser)
 		v1.DELETE("/unfollow/:username", auth.AuthMiddleware(),follow.UnfollowUser)
 		v1.GET("/is-following/:follower/:following", auth.AuthMiddleware(), follow.CheckFollowStatus)
+		v1.GET("/followers/:username", auth.AuthMiddleware(), follow.GetFollowers)
+		v1.GET("/following/:username", auth.AuthMiddleware(), follow.GetFollowing)
+
 
 		// Chat routes
 		v1.POST("/create-chat", auth.AuthMiddleware(), chat.CreateChat)

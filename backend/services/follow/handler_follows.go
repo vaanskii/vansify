@@ -156,3 +156,76 @@ func CheckFollowStatus(c *gin.Context) {
 
     c.JSON(http.StatusOK, gin.H{"is_following": followExists})
 }
+func GetFollowers(c *gin.Context) {
+    username := c.Param("username")
+    var userID int64
+    err := db.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID)
+    if err != nil {
+        log.Printf("Error retrieving user ID: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving user ID"})
+        return
+    }
+    rows, err := db.DB.Query("SELECT u.username, u.profile_picture FROM followers f JOIN users u ON f.follower_id = u.id WHERE f.following_id = ?", userID)
+    if err != nil {
+        log.Printf("Error retrieving followers: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving followers"})
+        return
+    }
+    defer rows.Close()
+
+    var followers []gin.H
+    for rows.Next() {
+        var username, profilePicture string
+        if err := rows.Scan(&username, &profilePicture); err != nil {
+            log.Printf("Error scanning follower: %v\n", err)
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving followers"})
+            return
+        }
+        followers = append(followers, gin.H{"username": username, "profile_picture": profilePicture})
+    }
+
+    if err := rows.Err(); err != nil {
+        log.Printf("Error iterating through followers: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving followers"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"followers": followers})
+}
+
+func GetFollowing(c *gin.Context) {
+    username := c.Param("username")
+    var userID int64
+    err := db.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID)
+    if err != nil {
+        log.Printf("Error retrieving user ID: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving user ID"})
+        return
+    }
+    rows, err := db.DB.Query("SELECT u.username, u.profile_picture FROM followers f JOIN users u ON f.following_id = u.id WHERE f.follower_id = ?", userID)
+    if err != nil {
+        log.Printf("Error retrieving followings: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving followings"})
+        return
+    }
+    defer rows.Close()
+
+    var followings []gin.H
+    for rows.Next() {
+        var username, profilePicture string
+        if err := rows.Scan(&username, &profilePicture); err != nil {
+            log.Printf("Error scanning following user: %v\n", err)
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving followings"})
+            return
+        }
+        followings = append(followings, gin.H{"username": username, "profile_picture": profilePicture})
+    }
+
+    if err := rows.Err(); err != nil {
+        log.Printf("Error iterating through followings: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving followings"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"followings": followings})
+}
