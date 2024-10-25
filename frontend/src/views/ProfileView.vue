@@ -86,14 +86,14 @@ const handleChat = async () => {
     
     // If chat exists, redirect to chat
     if (chatExistsResponse.data.chat_id) {
-      router.push({ path: `/chat/${chatExistsResponse.data.chat_id}`, query: { user: user.value.username } });
+      router.push({ path: `/inbox/${chatExistsResponse.data.chat_id}`, query: { user: user.value.username } });
     } else {
       // If chat does not exist, create a new chat
       const createChatResponse = await axios.post('/v1/create-chat', { user2: user.value.username }, {
         headers: { Authorization: `Bearer ${store.user.access}` }
       });
       const chatID = createChatResponse.data.chat_id;
-      router.push({ path: `/chat/${chatID}`, query: { user: user.value.username } });
+      router.push({ path: `/inbox/${chatID}`, query: { user: user.value.username } });
     }
   } catch (error) {
     console.error('Error creating or retrieving chat:', error);
@@ -101,9 +101,8 @@ const handleChat = async () => {
 };
 </script>
 
-
-<style scoped> 
-  .image{
+<style scoped>
+  .image {
     width: 150px;
     height: 150px;
   }
