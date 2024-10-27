@@ -138,6 +138,18 @@ const fetchChatHistory = async (chatID) => {
   }
 };
 
+const markChatNotificationsAsRead = async (chatID) => {
+  try {
+    const token = store.user.access;
+    await axios.post(`/v1/notifications/mark-read/${chatID}`, null, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    console.log(`Notifications for chat ${chatID} marked as read`);
+  } catch (error) {
+    console.error('Error marking notifications as read:', error);
+  }
+};
+
 // Lifecycle hooks
 onMounted(async () => {
   const token = store.user.access;
@@ -147,6 +159,8 @@ onMounted(async () => {
     await fetchChatHistory(chatID);
     chatUser.value = route.query.user || 'Unknown';
     connectWebSocket(chatID, token);
+
+    await markChatNotificationsAsRead(chatID);
   } else {
     isLoading.value = false;
   }

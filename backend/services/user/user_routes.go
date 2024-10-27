@@ -1,6 +1,7 @@
 package user
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -103,32 +104,68 @@ func GetUserByUsername(c *gin.Context) {
 func GetUserChats(c *gin.Context) {
     claims, exists := c.Get("claims")
     if !exists {
+        log.Println("Unauthorized: No claims found")
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
         return
     }
-    customClaims := claims.(*utils.CustomClaims)
+    customClaims, ok := claims.(*utils.CustomClaims)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+        return
+    }
     username := customClaims.Username
-
-    rows, err := db.DB.Query("SELECT chat_id, user1, user2 FROM chats WHERE user1 = ? OR user2 = ?", username, username)
+    var userID int64
+    err := db.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID)
     if err != nil {
+        log.Printf("Error retrieving user ID: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving user ID"})
+        return
+    }
+    
+    rows, err := db.DB.Query(`
+        SELECT c.chat_id, c.user1, c.user2, COALESCE(MAX(m.created_at), '') AS last_message_time
+        FROM chats c
+        LEFT JOIN messages m ON c.chat_id = m.chat_id
+        WHERE (c.user1 = ? OR c.user2 = ?) AND c.chat_id IN (SELECT DISTINCT chat_id FROM messages)
+        GROUP BY c.chat_id, c.user1, c.user2
+    `, username, username)
+    if err != nil {
+        log.Printf("Error fetching user chats: %v\n", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching user chats"})
         return
     }
     defer rows.Close()
-
-    var chats []map[string]string
+    
+    var chats []map[string]interface{}
     for rows.Next() {
-        var chatID, user1, user2 string
-        if err := rows.Scan(&chatID, &user1, &user2); err != nil {
+        var chatID, user1, user2, lastMessageTime string
+        if err := rows.Scan(&chatID, &user1, &user2, &lastMessageTime); err != nil {
+            log.Printf("Error scanning chat: %v\n", err)
             c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning chat"})
             return
         }
+        
         otherUser := user1
         if user1 == username {
             otherUser = user2
         }
-        chats = append(chats, map[string]string{"chat_id": chatID, "user": otherUser})
+        
+        // Get unread message count for each chat
+        var unreadCount int
+        err = db.DB.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND chat_id = ? AND is_read = false", userID, chatID).Scan(&unreadCount)
+        if err != nil {
+            log.Printf("Error fetching unread count: %v\n", err)
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching unread count"})
+            return
+        }
+        
+        chats = append(chats, map[string]interface{}{
+            "chat_id":           chatID,
+            "user":              otherUser,
+            "unread_count":      unreadCount,
+            "last_message_time": lastMessageTime,
+        })
     }
-
+    
     c.JSON(http.StatusOK, gin.H{"chats": chats})
 }
