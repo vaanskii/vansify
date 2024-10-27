@@ -19,7 +19,6 @@
   </div>
 </template>
 
-
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import axios from 'axios';
@@ -92,6 +91,11 @@ const connectWebSocket = (chatID, token) => {
     const message = JSON.parse(event.data);
     messages.value.push(message);
     console.log('Received message:', message);
+    
+    // Mark notifications as read if in chat
+    if (route.params.chatID === chatID) {
+      markChatNotificationsAsRead(chatID);
+    }
   };
   ws.onerror = (error) => {
     console.error('WebSocket error:', error);
@@ -159,7 +163,6 @@ onMounted(async () => {
     await fetchChatHistory(chatID);
     chatUser.value = route.query.user || 'Unknown';
     connectWebSocket(chatID, token);
-
     await markChatNotificationsAsRead(chatID);
   } else {
     isLoading.value = false;
