@@ -60,7 +60,7 @@ export const userStore = defineStore({
     },
     async refreshToken() {
       try {
-        const response = await axios.post("http://localhost:8080/v1/refresh-token", {
+        const response = await axios.post("/v1/refresh-token", {
           refresh_token: this.user.refresh,
         });
         this.user.access = response.data.access_token;

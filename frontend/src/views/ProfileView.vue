@@ -126,6 +126,7 @@ onMounted(async () => {
     // Fetch user details
     const response = await axios.get(`/v1/user/${username}`);
     user.value = response.data;
+    console.log(response.data.profile_picture)
     // Check follow status
     const followStatusResponse = await axios.get(`/v1/is-following/${loggedInUsername}/${username}`);
     isFollowing.value = followStatusResponse.data.is_following;
@@ -147,8 +148,8 @@ watch(route, async (newRoute) => {
       // Check follow status
       const followStatusResponse = await axios.get(`/v1/is-following/${loggedInUsername}/${username}`);
       isFollowing.value = followStatusResponse.data.is_following;
-      await fetchFollowers(username);  // Fetch followers for the new user
-      await fetchFollowings(username); // Fetch followings for the new user
+      await fetchFollowers(username);
+      await fetchFollowings(username);
     } catch (error) {
       console.error('Error fetching user details or follow status:', error);
       userFound.value = false;
