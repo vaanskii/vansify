@@ -57,21 +57,31 @@ const connectNotificationWebSocket = () => {
       const data = JSON.parse(event.data);
       console.log("WebSocket message received:", data);
 
-      chats.value = chats.value.map(chat => {
-        if (chat.chat_id === data.chat_id) {
-          return {
-            ...chat,
-            unread_count: data.unread_count,
-            last_message_time: data.last_message_time || new Date().toISOString()
-          };
-        }
-        return chat;
-      });
+      // Check if the chat already exists in the list
+      const chatIndex = chats.value.findIndex(chat => chat.chat_id === data.chat_id);
+      if (chatIndex !== -1) {
+        // Update existing chat
+        chats.value[chatIndex] = {
+          ...chats.value[chatIndex],
+          unread_count: data.unread_count,
+          last_message_time: data.last_message_time || new Date().toISOString(),
+          message: data.message,
+          user: data.user
+        };
+      } else {
+        // Add new chat
+        chats.value.push({
+          chat_id: data.chat_id,
+          user: data.user,
+          unread_count: data.unread_count,
+          last_message_time: data.last_message_time || new Date().toISOString(),
+          message: data.message
+        });
+      }
 
       // Trigger sort
       chats.value = chats.value.slice().sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
       console.log("Updated sorted chat list:", chats.value);
-
     } catch (e) {
       console.error("Error processing WebSocket message:", e);
     }
@@ -83,6 +93,7 @@ const connectNotificationWebSocket = () => {
     console.log("Notification WebSocket connection closed");
   };
 };
+
 
 onMounted(() => {
   if (store.user.isAuthenticated) {

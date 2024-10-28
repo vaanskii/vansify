@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -97,7 +99,6 @@ func CreateChat(c *gin.Context) {
 func WsHandler(c *gin.Context) {
     chatID := c.Param("chatID")
     token := c.Query("token")
-    
     log.Printf("Attempting to upgrade connection for chatID: %s with token: %s", chatID, token)
     token = strings.TrimSpace(token)
     log.Printf("Token after trimming: %s", token)
@@ -114,7 +115,6 @@ func WsHandler(c *gin.Context) {
         return
     }
     log.Printf("Token valid for user: %s", claims.Username)
-
     conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
     if err != nil {
         log.Println("WebSocket Upgrade error:", err)
@@ -122,7 +122,7 @@ func WsHandler(c *gin.Context) {
     }
     log.Println("WebSocket connection established for chatID:", chatID)
     defer conn.Close()
-    
+
     hub.AddConnection(conn)
     defer hub.RemoveConnection(conn)
 
@@ -139,7 +139,6 @@ func WsHandler(c *gin.Context) {
             log.Println("WebSocket ReadMessage error:", err)
             return
         }
-
         var incomingMessage models.Message
         if err := json.Unmarshal(p, &incomingMessage); err != nil {
             log.Println("Error decoding incoming message:", err)
@@ -149,8 +148,7 @@ func WsHandler(c *gin.Context) {
         incomingMessage.Username = claims.Username
 
         // Save message to database
-        _, execErr := db.DB.Exec("INSERT INTO messages (chat_id, message, username) VALUES (?, ?, ?)", 
-            incomingMessage.ChatID, incomingMessage.Message, incomingMessage.Username)
+        _, execErr := db.DB.Exec("INSERT INTO messages (chat_id, message, username) VALUES (?, ?, ?)", incomingMessage.ChatID, incomingMessage.Message, incomingMessage.Username)
         if execErr != nil {
             log.Println("DB Exec error:", execErr)
             return
@@ -163,7 +161,6 @@ func WsHandler(c *gin.Context) {
         } else {
             recipientUsername = chat.User1
         }
-
         var recipientID int
         err = db.DB.QueryRow("SELECT id FROM users WHERE username = ?", recipientUsername).Scan(&recipientID)
         if err != nil {
@@ -172,17 +169,28 @@ func WsHandler(c *gin.Context) {
             notifications.NotifyNewMessage(int64(recipientID), incomingMessage)
             log.Printf("Notification sent to user ID: %d for message: %s", recipientID, incomingMessage.Message)
 
-            // Get unread count for total messages
-            totalUnreadCount, err := notifications.GetTotalUnreadMessageCount(int64(recipientID))
+            // Convert chatID to int64
+            chatIDInt64, err := strconv.ParseInt(chatID, 10, 64)
             if err != nil {
-                log.Printf("Error getting total unread message count: %v", err)
+                log.Printf("Error converting chatID to int64: %v", err)
+                return
+            }
+
+            // Get unread count for this specific chat
+            chatUnreadCount, err := notifications.GetUnreadChatMessagesCount(int64(recipientID), chatIDInt64)
+            if err != nil {
+                log.Printf("Error getting unread message count for chat: %v", err)
             } else {
-                // Broadcast the total unread count notification
-                notificationMessage, _ := json.Marshal(map[string]interface{}{
-                    "user_id": recipientID,
-                    "unread_count": totalUnreadCount,
+                // Broadcast the chat-specific unread count notification
+                chatNotificationMessage, _ := json.Marshal(map[string]interface{}{
+                    "user_id":           recipientID,
+                    "chat_id":           chatID,
+                    "unread_count":      chatUnreadCount,
+                    "message":           incomingMessage.Message,
+                    "user":              claims.Username,
+                    "last_message_time": time.Now().Format(time.RFC3339),
                 })
-                notifications.GlobalNotificationHub.BroadcastNotification(notificationMessage)
+                notifications.GlobalNotificationHub.BroadcastNotification(chatNotificationMessage)
             }
         }
 

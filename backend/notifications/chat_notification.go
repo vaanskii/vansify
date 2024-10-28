@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vaanskii/vansify/db"
@@ -29,9 +30,12 @@ func NotifyNewMessage(userID int64, message models.Message) {
 
     // Broadcast the notification to all connected clients
     notificationMessage, _ := json.Marshal(map[string]interface{}{
-        "user_id":      userID,
-        "chat_id":      message.ChatID,
-        "unread_count": chatUnreadCount,
+        "user_id":          userID,
+        "chat_id":          message.ChatID,
+        "unread_count":     chatUnreadCount,
+        "message":          message.Message,
+        "user":             message.Username,
+        "last_message_time": time.Now().Format(time.RFC3339),
     })
     GlobalNotificationHub.BroadcastNotification(notificationMessage)
 }
