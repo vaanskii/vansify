@@ -1,17 +1,21 @@
 <template>
   <div>
     <h1>Your Chats</h1>
-    <ul>
+    <ul v-if="chats.length > 0">
       <li v-for="chat in sortedChats" :key="chat.chat_id">
         <router-link :to="{ name: 'chat', params: { chatID: chat.chat_id }, query: { user: chat.user } }">
           {{ chat.user }}
-          <span v-if="chat.unread_count > 0">({{ chat.unread_count }})</span> <!-- Show unread count per chat -->
+          <span v-if="chat.unread_count > 0">({{ chat.unread_count }})</span>
+          <br>
+          <span>{{ formatTime(chat.last_message_time) }}</span>
         </router-link>
       </li>
     </ul>
+    <div v-else>No chats found</div>
     <div v-if="error" class="error">{{ error }}</div>
   </div>
 </template>
+
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
@@ -28,12 +32,16 @@ let ws;
 const fetchChats = async () => {
   try {
     const response = await axios.get('/v1/me/chats');
-    chats.value = response.data.chats.map(chat => ({
-      chat_id: chat.chat_id,
-      user: chat.user,
-      unread_count: chat.unread_count,
-      last_message_time: chat.last_message_time
-    }));
+    if (response.data && response.data.chats) {
+      chats.value = response.data.chats.map(chat => ({
+        chat_id: chat.chat_id,
+        user: chat.user,
+        unread_count: chat.unread_count,
+        last_message_time: chat.last_message_time
+      }));
+    } else {
+      chats.value = [];
+    }
     console.log("Fetched chats with unread counts:", chats.value);
   } catch (err) {
     error.value = err.response ? err.response.data.error : 'An error occurred';
@@ -46,6 +54,18 @@ const sortedChats = computed(() => {
   console.log("Sorting chats based on last message time", chats.value);  // Debug to ensure sorting
   return chats.value.slice().sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
 });
+
+const formatTime = (timestamp) => {
+  const timeDiff = Math.floor((Date.now() - new Date(timestamp)) / 1000);
+  if (timeDiff < 60) return 'Just now';
+  const minutes = Math.floor(timeDiff / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+};
+
 
 const connectNotificationWebSocket = () => {
   ws = new WebSocket(wsUrl);
