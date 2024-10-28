@@ -197,13 +197,6 @@ const handleChat = async () => {
 };
 </script>
 
-<style scoped>
-  .image {
-    width: 150px;
-    height: 150px;
-  }
-</style>
-
 
 <style scoped>
   .image {
