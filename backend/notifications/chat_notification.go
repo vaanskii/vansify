@@ -48,7 +48,7 @@ func GetTotalUnreadMessageCount(userID int64) (int, error) {
 }
 
 
-func GetUnreadChatMessagesCount(userID, chatID int64) (int, error) {
+func GetUnreadChatMessagesCount(userID int64, chatID string) (int, error) {
     var count int
     err := db.DB.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND chat_id = ? AND is_read = false", userID, chatID).Scan(&count)
     return count, err

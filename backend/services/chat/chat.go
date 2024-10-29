@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -122,22 +121,19 @@ func WsHandler(c *gin.Context) {
     }
     log.Println("WebSocket connection established for chatID:", chatID)
     defer conn.Close()
-
     hub.AddConnection(conn)
     defer hub.RemoveConnection(conn)
-
     var chat models.Chat
     err = db.DB.QueryRow("SELECT user1, user2 FROM chats WHERE chat_id = ?", chatID).Scan(&chat.User1, &chat.User2)
     if err != nil {
         log.Println("Error querying chat:", err)
         return
     }
-
     for {
         messageType, p, err := conn.ReadMessage()
         if err != nil {
             log.Println("WebSocket ReadMessage error:", err)
-            return
+            break
         }
         var incomingMessage models.Message
         if err := json.Unmarshal(p, &incomingMessage); err != nil {
@@ -146,14 +142,12 @@ func WsHandler(c *gin.Context) {
         }
         incomingMessage.ChatID = chatID
         incomingMessage.Username = claims.Username
-
         // Save message to database
         _, execErr := db.DB.Exec("INSERT INTO messages (chat_id, message, username) VALUES (?, ?, ?)", incomingMessage.ChatID, incomingMessage.Message, incomingMessage.Username)
         if execErr != nil {
             log.Println("DB Exec error:", execErr)
-            return
+            continue
         }
-
         // Determine recipient and notify
         var recipientUsername string
         if claims.Username == chat.User1 {
@@ -168,16 +162,8 @@ func WsHandler(c *gin.Context) {
         } else {
             notifications.NotifyNewMessage(int64(recipientID), incomingMessage)
             log.Printf("Notification sent to user ID: %d for message: %s", recipientID, incomingMessage.Message)
-
-            // Convert chatID to int64
-            chatIDInt64, err := strconv.ParseInt(chatID, 10, 64)
-            if err != nil {
-                log.Printf("Error converting chatID to int64: %v", err)
-                return
-            }
-
             // Get unread count for this specific chat
-            chatUnreadCount, err := notifications.GetUnreadChatMessagesCount(int64(recipientID), chatIDInt64)
+            chatUnreadCount, err := notifications.GetUnreadChatMessagesCount(int64(recipientID), chatID)
             if err != nil {
                 log.Printf("Error getting unread message count for chat: %v", err)
             } else {
@@ -193,30 +179,37 @@ func WsHandler(c *gin.Context) {
                 notifications.GlobalNotificationHub.BroadcastNotification(chatNotificationMessage)
             }
         }
-
         // Broadcast the message to all connected clients
         broadcastMessage, _ := json.Marshal(incomingMessage)
         hub.BroadcastMessage(conn, messageType, broadcastMessage)
     }
 }
 
+
 func GetChatHistory(c *gin.Context) {
     chatID := c.Param("chatID")
-    rows, err := db.DB.Query("SELECT id, chat_id, message, username FROM messages where chat_id = ?", chatID)
+    rows, err := db.DB.Query("SELECT id, chat_id, message, username, created_at FROM messages WHERE chat_id = ?", chatID)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching chat history"})
         return
     }
     defer rows.Close()
-
-    var messages []models.Message
+    var messages []map[string]interface{}
     for rows.Next() {
         var message models.Message
-        if err := rows.Scan(&message.ID, &message.ChatID, &message.Message, &message.Username); err != nil {
+        var createdAt time.Time
+        if err := rows.Scan(&message.ID, &message.ChatID, &message.Message, &message.Username, &createdAt); err != nil {
             c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning message"})
             return
         }
-        messages = append(messages, message)
+        formattedTime := createdAt.Format("2006-01-02 15:04:05")
+        messages = append(messages, map[string]interface{}{
+            "id":         message.ID,
+            "chat_id":    message.ChatID,
+            "message":    message.Message,
+            "username":   message.Username,
+            "created_at": formattedTime,
+        })
     }
     c.JSON(http.StatusOK, messages)
 }
