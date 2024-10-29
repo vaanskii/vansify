@@ -66,6 +66,13 @@ const formatTime = (timestamp) => {
   return `${days} ${days === 1 ? 'day' : 'days'} ago`;
 };
 
+const updateMessageTimes = () => {
+  chats.value = chats.value.map(chat => ({
+    ...chat,
+    time: formatTime(chat.last_message_time) 
+  }));
+};
+
 
 const connectNotificationWebSocket = () => {
   ws = new WebSocket(wsUrl);
@@ -119,6 +126,7 @@ onMounted(() => {
   if (store.user.isAuthenticated) {
     fetchChats();
     connectNotificationWebSocket();
+    setInterval(updateMessageTimes, 60000);
   }
 });
 

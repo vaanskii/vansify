@@ -5,7 +5,7 @@
     <div v-if="!isLoading">
       <div v-for="message in formattedMessages" :key="message.id">
         <strong v-if="message.username && !message.isOwnMessage">{{ message.username }}</strong>
-        {{ message.message }}
+        {{ message.message }} - {{ formatTime(message.created_at) }}
         <span v-if="message.isOwnMessage">
           <span v-if="message.status === true">(Sent)</span>
           <span v-if="message.status === false">(Not Sent)</span>
@@ -69,15 +69,35 @@ const removeOfflineMessages = () => {
   localStorage.removeItem(offlineStorageKey);
 };
 
+const formatTime = (timestamp) => {
+  const timeDiff = Math.floor((Date.now() - new Date(timestamp)) / 1000);
+  if (timeDiff < 60) return 'Just now';
+  const minutes = Math.floor(timeDiff / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+};
+
+const updateMessageTimes = () => {
+  messages.value = messages.value.map(message => ({
+    ...message,
+    time: formatTime(message.created_at) 
+  }));
+};
+
 // WebSocket connection logic
 const connectWebSocket = (chatID, token) => {
   const wsURL = `ws://${apiUrl}/v1/chat/${chatID}?token=${encodeURIComponent(token)}`;
   ws = new WebSocket(wsURL);
+
   ws.onopen = () => {
     console.log('WebSocket connection established');
     isConnected.value = true;
     retryAttempt = 0;
     isLoading.value = false;
+
     // Resend unsent messages
     const unsentMessages = messages.value.filter(msg => msg.status === false && msg.isOwnMessage);
     unsentMessages.forEach(message => {
@@ -87,20 +107,29 @@ const connectWebSocket = (chatID, token) => {
     });
     removeOfflineMessages();
   };
+
   ws.onmessage = (event) => {
-    const message = JSON.parse(event.data);
-    messages.value.push(message);
-    console.log('Received message:', message);
-    
-    // Mark notifications as read if in chat
-    if (route.params.chatID === chatID) {
-      markChatNotificationsAsRead(chatID);
-    }
-  };
+  const message = JSON.parse(event.data);
+  console.log('Received message:', message);
+
+  messages.value.push({
+    ...message,
+    isOwnMessage: message.username === username,
+  });
+  console.log('Updated messages array:', messages.value);
+
+  // Mark notifications as read if in chat
+  if (route.params.chatID === chatID) {
+    markChatNotificationsAsRead(chatID);
+  }
+};
+
+
   ws.onerror = (error) => {
     console.error('WebSocket error:', error);
     isConnected.value = false;
   };
+
   ws.onclose = () => {
     console.log('WebSocket connection closed');
     isConnected.value = false;
@@ -109,12 +138,13 @@ const connectWebSocket = (chatID, token) => {
         retryAttempt++;
         console.log(`Reconnecting... Attempt ${retryAttempt}`);
         connectWebSocket(chatID, token);
-      }, Math.min(1000 * Math.pow(2, retryAttempt), 30000)); // Exponential backoff
+      }, Math.min(1000 * Math.pow(2, retryAttempt), 30000));
     } else {
       console.error('Max reconnection attempts reached.');
     }
   };
 };
+
 
 // Fetch chat history
 const fetchChatHistory = async (chatID) => {
@@ -125,6 +155,7 @@ const fetchChatHistory = async (chatID) => {
         ...message,
         isOwnMessage: message.username === username,
         status: true,
+        time: message.created_at
       }));
       const existingMessageIds = new Set(messages.value.map(msg => msg.id));
       newMessages.forEach(newMessage => {
@@ -164,6 +195,8 @@ onMounted(async () => {
     chatUser.value = route.query.user || 'Unknown';
     connectWebSocket(chatID, token);
     await markChatNotificationsAsRead(chatID);
+
+    setInterval(updateMessageTimes, 60000);
   } else {
     isLoading.value = false;
   }
@@ -179,7 +212,7 @@ const sendMessage = () => {
   const message = {
     username,
     message: newMessage.value,
-    timestamp: Date.now()
+    created_at: new Date().toISOString()
   };
   if (ws && isConnected.value) {
     ws.send(JSON.stringify(message));
@@ -192,6 +225,7 @@ const sendMessage = () => {
   }
   newMessage.value = '';
 };
+
 
 // Watch for changes in connection status to update offline messages
 watch(isConnected, (newVal) => {
