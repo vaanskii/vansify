@@ -99,21 +99,26 @@ func WsHandler(c *gin.Context) {
     chatID := c.Param("chatID")
     token := c.Query("token")
     log.Printf("Attempting to upgrade connection for chatID: %s with token: %s", chatID, token)
+
     token = strings.TrimSpace(token)
     log.Printf("Token after trimming: %s", token)
+
     parsedToken, err := utils.VerifyJWT(token)
     if err != nil {
         log.Println("Invalid token:", err)
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
         return
     }
+
     claims, ok := parsedToken.Claims.(*utils.CustomClaims)
     if !ok || !parsedToken.Valid {
         log.Println("Invalid claims or token not valid")
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
         return
     }
+
     log.Printf("Token valid for user: %s", claims.Username)
+
     conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
     if err != nil {
         log.Println("WebSocket Upgrade error:", err)
@@ -121,33 +126,57 @@ func WsHandler(c *gin.Context) {
     }
     log.Println("WebSocket connection established for chatID:", chatID)
     defer conn.Close()
+
     hub.AddConnection(conn)
     defer hub.RemoveConnection(conn)
+
     var chat models.Chat
     err = db.DB.QueryRow("SELECT user1, user2 FROM chats WHERE chat_id = ?", chatID).Scan(&chat.User1, &chat.User2)
     if err != nil {
         log.Println("Error querying chat:", err)
         return
     }
+
     for {
         messageType, p, err := conn.ReadMessage()
         if err != nil {
             log.Println("WebSocket ReadMessage error:", err)
             break
         }
+
         var incomingMessage models.Message
         if err := json.Unmarshal(p, &incomingMessage); err != nil {
             log.Println("Error decoding incoming message:", err)
             continue
         }
+
         incomingMessage.ChatID = chatID
         incomingMessage.Username = claims.Username
+
+        // Fetch the profile picture URL for the user
+        var profilePicture string
+        err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", incomingMessage.Username).Scan(&profilePicture)
+        if err != nil {
+            log.Println("Error querying profile picture:", err)
+            profilePicture = "" // Set to empty or a default value if needed
+        }
+
+        // Create a message structure that includes the profile picture
+        fullMessage := struct {
+            models.Message
+            ProfilePicture string `json:"profile_picture"`
+        }{
+            Message:        incomingMessage,
+            ProfilePicture: profilePicture,
+        }
+
         // Save message to database
         _, execErr := db.DB.Exec("INSERT INTO messages (chat_id, message, username) VALUES (?, ?, ?)", incomingMessage.ChatID, incomingMessage.Message, incomingMessage.Username)
         if execErr != nil {
             log.Println("DB Exec error:", execErr)
             continue
         }
+
         // Determine recipient and notify
         var recipientUsername string
         if claims.Username == chat.User1 {
@@ -155,6 +184,7 @@ func WsHandler(c *gin.Context) {
         } else {
             recipientUsername = chat.User1
         }
+
         var recipientID int
         err = db.DB.QueryRow("SELECT id FROM users WHERE username = ?", recipientUsername).Scan(&recipientID)
         if err != nil {
@@ -162,6 +192,7 @@ func WsHandler(c *gin.Context) {
         } else {
             notifications.NotifyNewMessage(int64(recipientID), incomingMessage)
             log.Printf("Notification sent to user ID: %d for message: %s", recipientID, incomingMessage.Message)
+
             // Get unread count for this specific chat
             chatUnreadCount, err := notifications.GetUnreadChatMessagesCount(int64(recipientID), chatID)
             if err != nil {
@@ -174,45 +205,73 @@ func WsHandler(c *gin.Context) {
                     "unread_count":      chatUnreadCount,
                     "message":           incomingMessage.Message,
                     "user":              claims.Username,
+                    "profile_picture":    profilePicture,  // Add this line
                     "last_message_time": time.Now().Format(time.RFC3339),
                 })
                 notifications.GlobalNotificationHub.BroadcastNotification(chatNotificationMessage)
             }
         }
+
         // Broadcast the message to all connected clients
-        broadcastMessage, _ := json.Marshal(incomingMessage)
+        broadcastMessage, _ := json.Marshal(fullMessage)
         hub.BroadcastMessage(conn, messageType, broadcastMessage)
     }
 }
 
-
 func GetChatHistory(c *gin.Context) {
     chatID := c.Param("chatID")
+    chattingUser := c.Query("user")
+
+    if chattingUser == "" {
+        log.Println("No user specified in the query parameters")
+        c.JSON(http.StatusBadRequest, gin.H{"error": "No user specified in the query parameters"})
+        return
+    }
+
+    log.Printf("Fetching profile picture for user: %s", chattingUser)
+
+    // Fetch the profile picture for the chatting user
+    var profilePicture string
+    err := db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", chattingUser).Scan(&profilePicture)
+    if err != nil {
+        log.Println("Error fetching user profile picture:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching user profile picture"})
+        return
+    }
+    log.Printf("Profile Picture for %s: %s", chattingUser, profilePicture)
+
+    // Fetch messages for the chat
     rows, err := db.DB.Query("SELECT id, chat_id, message, username, created_at FROM messages WHERE chat_id = ?", chatID)
     if err != nil {
+        log.Println("Error fetching chat history:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching chat history"})
         return
     }
     defer rows.Close()
+
     var messages []map[string]interface{}
     for rows.Next() {
         var message models.Message
         var createdAt time.Time
         if err := rows.Scan(&message.ID, &message.ChatID, &message.Message, &message.Username, &createdAt); err != nil {
+            log.Println("Error scanning message:", err)
             c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning message"})
             return
         }
         formattedTime := createdAt.Format("2006-01-02 15:04:05")
         messages = append(messages, map[string]interface{}{
-            "id":         message.ID,
-            "chat_id":    message.ChatID,
-            "message":    message.Message,
-            "username":   message.Username,
-            "created_at": formattedTime,
+            "id":              message.ID,
+            "chat_id":         message.ChatID,
+            "message":         message.Message,
+            "username":        message.Username,
+            "created_at":      formattedTime,
+            "profile_picture": profilePicture,
         })
     }
+    log.Println("Fetched Messages:", messages)
     c.JSON(http.StatusOK, messages)
 }
+
 
 func CheckChatExists(c *gin.Context) {
 	user1 := c.Param("user1")

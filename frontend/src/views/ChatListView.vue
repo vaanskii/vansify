@@ -4,6 +4,7 @@
     <ul v-if="chats.length > 0">
       <li v-for="chat in sortedChats" :key="chat.chat_id">
         <router-link :to="{ name: 'chat', params: { chatID: chat.chat_id }, query: { user: chat.user } }">
+          <img :src="chat.profile_picture" alt="Profile Picture" width="30" height="30" />  <!-- Add this line -->
           {{ chat.user }}
           <span v-if="chat.unread_count > 0">({{ chat.unread_count }})</span>
           <br>
@@ -37,7 +38,8 @@ const fetchChats = async () => {
         chat_id: chat.chat_id,
         user: chat.user,
         unread_count: chat.unread_count,
-        last_message_time: chat.last_message_time
+        last_message_time: chat.last_message_time,
+        profile_picture: chat.profile_picture
       }));
     } else {
       chats.value = [];
@@ -83,6 +85,7 @@ const connectNotificationWebSocket = () => {
     try {
       const data = JSON.parse(event.data);
       console.log("WebSocket message received:", data);
+      console.log("Profile picture URL:", data.profile_picture); // Log the profile picture URL
 
       // Check if the chat already exists in the list
       const chatIndex = chats.value.findIndex(chat => chat.chat_id === data.chat_id);
@@ -93,7 +96,8 @@ const connectNotificationWebSocket = () => {
           unread_count: data.unread_count,
           last_message_time: data.last_message_time || new Date().toISOString(),
           message: data.message,
-          user: data.user
+          user: data.user,
+          profile_picture: data.profile_picture  // Ensure profile picture is updated
         };
       } else {
         // Add new chat
@@ -102,7 +106,8 @@ const connectNotificationWebSocket = () => {
           user: data.user,
           unread_count: data.unread_count,
           last_message_time: data.last_message_time || new Date().toISOString(),
-          message: data.message
+          message: data.message,
+          profile_picture: data.profile_picture  // Ensure profile picture is set
         });
       }
 
@@ -120,6 +125,7 @@ const connectNotificationWebSocket = () => {
     console.log("Notification WebSocket connection closed");
   };
 };
+
 
 
 onMounted(() => {

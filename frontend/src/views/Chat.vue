@@ -4,7 +4,10 @@
     <div v-if="formattedMessages.length === 0 && !isLoading">No messages yet</div>
     <div v-if="!isLoading">
       <div v-for="message in formattedMessages" :key="message.id">
-        <strong v-if="message.username && !message.isOwnMessage">{{ message.username }}</strong>
+        <strong v-if="message.username && !message.isOwnMessage">
+          <img :src="message.profile_picture" alt="Profile Picture" width="30" height="30" />
+          {{ message.username }}
+        </strong>
         {{ message.message }} - {{ formatTime(message.created_at) }}
         <span v-if="message.isOwnMessage">
           <span v-if="message.status === true">(Sent)</span>
@@ -108,6 +111,7 @@ const connectWebSocket = (chatID, token) => {
     removeOfflineMessages();
   };
 
+  
   ws.onmessage = (event) => {
   const message = JSON.parse(event.data);
   console.log('Received message:', message);
@@ -115,6 +119,7 @@ const connectWebSocket = (chatID, token) => {
   messages.value.push({
     ...message,
     isOwnMessage: message.username === username,
+    profile_picture: `/${message.profile_picture}`
   });
   console.log('Updated messages array:', messages.value);
 
@@ -149,14 +154,18 @@ const connectWebSocket = (chatID, token) => {
 // Fetch chat history
 const fetchChatHistory = async (chatID) => {
   try {
-    const response = await axios.get(`/v1/chat/${chatID}/history`);
+    const response = await axios.get(`/v1/chat/${chatID}/history?user=${route.query.user}`);
     if (response.data) {
-      const newMessages = response.data.map(message => ({
-        ...message,
-        isOwnMessage: message.username === username,
-        status: true,
-        time: message.created_at
-      }));
+      const newMessages = response.data.map(message => {
+        console.log('Profile Picture:', message.profile_picture); 
+        return {
+          ...message,
+          isOwnMessage: message.username === username,
+          status: true,
+          time: message.created_at,
+          profile_picture: `/${message.profile_picture}`
+        };
+      });
       const existingMessageIds = new Set(messages.value.map(msg => msg.id));
       newMessages.forEach(newMessage => {
         if (!existingMessageIds.has(newMessage.id)) {
@@ -172,6 +181,7 @@ const fetchChatHistory = async (chatID) => {
     isLoading.value = false;
   }
 };
+
 
 const markChatNotificationsAsRead = async (chatID) => {
   try {

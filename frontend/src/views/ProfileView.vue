@@ -126,7 +126,7 @@ onMounted(async () => {
     // Fetch user details
     const response = await axios.get(`/v1/user/${username}`);
     user.value = response.data;
-    console.log(response.data.profile_picture)
+    user.value.profile_picture = `/${user.value.profile_picture}`;
     // Check follow status
     const followStatusResponse = await axios.get(`/v1/is-following/${loggedInUsername}/${username}`);
     isFollowing.value = followStatusResponse.data.is_following;
@@ -145,6 +145,7 @@ watch(route, async (newRoute) => {
       // Fetch user details
       const response = await axios.get(`/v1/user/${username}`);
       user.value = response.data;
+      user.value.profile_picture = `/${user.value.profile_picture}`;
       // Check follow status
       const followStatusResponse = await axios.get(`/v1/is-following/${loggedInUsername}/${username}`);
       isFollowing.value = followStatusResponse.data.is_following;

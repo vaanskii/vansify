@@ -114,6 +114,7 @@ func GetUserChats(c *gin.Context) {
         return
     }
     username := customClaims.Username
+
     var userID int64
     err := db.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID)
     if err != nil {
@@ -121,7 +122,7 @@ func GetUserChats(c *gin.Context) {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving user ID"})
         return
     }
-    
+
     rows, err := db.DB.Query(`
         SELECT c.chat_id, c.user1, c.user2, COALESCE(MAX(m.created_at), '') AS last_message_time
         FROM chats c
@@ -135,7 +136,7 @@ func GetUserChats(c *gin.Context) {
         return
     }
     defer rows.Close()
-    
+
     var chats []map[string]interface{}
     for rows.Next() {
         var chatID, user1, user2, lastMessageTime string
@@ -144,12 +145,22 @@ func GetUserChats(c *gin.Context) {
             c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning chat"})
             return
         }
-        
+
         otherUser := user1
         if user1 == username {
             otherUser = user2
         }
-        
+
+        // Fetch the profile picture of the other user
+        var profilePicture string
+        err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", otherUser).Scan(&profilePicture)
+        if err != nil {
+            log.Printf("Error querying profile picture for user %s: %v\n", otherUser, err)
+            profilePicture = "" // Set to empty or a default value if needed
+        }
+
+        log.Printf("Other User: %s, Profile Picture: %s", otherUser, profilePicture)
+
         // Get unread message count for each chat
         var unreadCount int
         err = db.DB.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND chat_id = ? AND is_read = false", userID, chatID).Scan(&unreadCount)
@@ -158,14 +169,16 @@ func GetUserChats(c *gin.Context) {
             c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching unread count"})
             return
         }
-        
+
         chats = append(chats, map[string]interface{}{
             "chat_id":           chatID,
             "user":              otherUser,
             "unread_count":      unreadCount,
             "last_message_time": lastMessageTime,
+            "profile_picture":   profilePicture,
         })
     }
-    
+
     c.JSON(http.StatusOK, gin.H{"chats": chats})
 }
+
