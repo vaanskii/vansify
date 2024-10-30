@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -161,7 +162,22 @@ func WsHandler(c *gin.Context) {
             profilePicture = "" // Set to empty or a default value if needed
         }
 
-        // Create a message structure that includes the profile picture
+        // Save message to database
+        result, execErr := db.DB.Exec("INSERT INTO messages (chat_id, message, username) VALUES (?, ?, ?)", incomingMessage.ChatID, incomingMessage.Message, incomingMessage.Username)
+        if execErr != nil {
+            log.Println("DB Exec error:", execErr)
+            continue
+        }
+
+        messageID, err := result.LastInsertId()
+        if err != nil {
+            log.Println("Error retrieving last insert ID:", err)
+            continue
+        }
+        incomingMessage.ID = int(messageID)
+        fmt.Printf("Message ID: %d\n", incomingMessage.ID)
+
+        // Create a message structure that includes the profile picture and real ID
         fullMessage := struct {
             models.Message
             ProfilePicture string `json:"profile_picture"`
@@ -170,12 +186,12 @@ func WsHandler(c *gin.Context) {
             ProfilePicture: profilePicture,
         }
 
-        // Save message to database
-        _, execErr := db.DB.Exec("INSERT INTO messages (chat_id, message, username) VALUES (?, ?, ?)", incomingMessage.ChatID, incomingMessage.Message, incomingMessage.Username)
-        if execErr != nil {
-            log.Println("DB Exec error:", execErr)
-            continue
-        }
+        // Send the message back to the sender only
+        broadcastMessage, _ := json.Marshal(fullMessage)
+        conn.WriteMessage(messageType, broadcastMessage)
+
+        // Broadcast the message to all connected clients except the sender
+        hub.BroadcastMessage(conn, messageType, broadcastMessage)
 
         // Determine recipient and notify
         var recipientUsername string
@@ -205,18 +221,15 @@ func WsHandler(c *gin.Context) {
                     "unread_count":      chatUnreadCount,
                     "message":           incomingMessage.Message,
                     "user":              claims.Username,
-                    "profile_picture":    profilePicture,  // Add this line
+                    "profile_picture":   profilePicture,
                     "last_message_time": time.Now().Format(time.RFC3339),
                 })
                 notifications.GlobalNotificationHub.BroadcastNotification(chatNotificationMessage)
             }
         }
-
-        // Broadcast the message to all connected clients
-        broadcastMessage, _ := json.Marshal(fullMessage)
-        hub.BroadcastMessage(conn, messageType, broadcastMessage)
     }
 }
+
 
 func GetChatHistory(c *gin.Context) {
     chatID := c.Param("chatID")
@@ -289,4 +302,85 @@ func CheckChatExists(c *gin.Context) {
 	}
   
 	c.JSON(http.StatusOK, gin.H{"chat_id": chatID})
+}
+
+func DeleteChat(c *gin.Context) {
+    chatID := c.Param("chatID")
+
+    claims, exists := c.Get("claims")
+    if !exists {
+        log.Println("No claims found")
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+        return
+    }
+
+    customClaims, ok := claims.(*utils.CustomClaims)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+        return
+    }
+
+    username := customClaims.Username
+    var chatUserCount int
+
+    // Ensure the user is part of the chat to delete it
+    err := db.DB.QueryRow("SELECT COUNT(*) FROM chats WHERE chat_id = ? AND (user1 = ? OR user2 = ?)", chatID, username, username).Scan(&chatUserCount)
+    if err != nil || chatUserCount == 0 {
+        log.Printf("Chat not found or user is not part of the chat. Error: %v", err)
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+        return
+    }
+
+    // Delete the chat from the database
+    _, err = db.DB.Exec("DELETE FROM chats WHERE chat_id = ?", chatID)
+    if err != nil {
+        log.Printf("Error deleting chat: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting chat"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"message": "Chat deleted successfully"})
+}
+
+func DeleteMessage(c *gin.Context) {
+    claims, exists := c.Get("claims")
+    if !exists {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+        return
+    }
+    customClaims, ok := claims.(*utils.CustomClaims)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+        return
+    }
+    username := customClaims.Username
+    messageID := c.Param("messageID")
+
+    var message models.Message
+    err := db.DB.QueryRow("SELECT id, username FROM messages WHERE id = ?", messageID).Scan(&message.ID, &message.Username)
+    if err != nil {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Incorrect message ID"})
+        return
+    }
+    if message.Username != username {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "You do not have permission to delete this message"})
+        return
+    }
+
+    _, err = db.DB.Exec("DELETE FROM messages WHERE id = ?", messageID)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting message"})
+        return
+    }
+
+    // Broadcast deletion to all connected clients
+    deleteMessage := map[string]interface{}{
+        "type":      "MESSAGE_DELETED",
+        "message_id": messageID,
+    }
+    broadcastMessage, _ := json.Marshal(deleteMessage)
+    log.Printf("Broadcasting delete message: %s", broadcastMessage)
+    hub.BroadcastMessage(nil, websocket.TextMessage, broadcastMessage)  // Ensure this broadcasts to everyone
+
+    c.JSON(http.StatusOK, gin.H{"message": "Message deleted successfully"})
 }

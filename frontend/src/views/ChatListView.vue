@@ -10,6 +10,7 @@
           <br>
           <span>{{ formatTime(chat.last_message_time) }}</span>
         </router-link>
+        <button @click="deleteChat(chat.chat_id)">Delete</button>
       </li>
     </ul>
     <div v-else>No chats found</div>
@@ -48,6 +49,15 @@ const fetchChats = async () => {
   } catch (err) {
     error.value = err.response ? err.response.data.error : 'An error occurred';
     console.error("Error fetching chats:", err);
+  }
+};
+
+const deleteChat = async (chatID) => {
+  try {
+    await axios.delete(`/v1/chat/${chatID}`);
+    chats.value = chats.value.filter(chat => chat.chat_id !== chatID);
+  } catch (err) {
+    error.value = err.response ? err.response.data.error : 'An error occurred';
   }
 };
 

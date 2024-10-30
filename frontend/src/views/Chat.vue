@@ -3,7 +3,7 @@
     <h2>Chat with {{ chatUser }}</h2>
     <div v-if="formattedMessages.length === 0 && !isLoading">No messages yet</div>
     <div v-if="!isLoading">
-      <div v-for="message in formattedMessages" :key="message.id">
+      <div v-for="message in formattedMessages" :key="message.id"> <!-- Key bound to message.id -->
         <strong v-if="message.username && !message.isOwnMessage">
           <img :src="message.profile_picture" alt="Profile Picture" width="30" height="30" />
           {{ message.username }}
@@ -12,6 +12,7 @@
         <span v-if="message.isOwnMessage">
           <span v-if="message.status === true">(Sent)</span>
           <span v-if="message.status === false">(Not Sent)</span>
+          <button @click="deleteMessage(message.id)">Delete</button>
         </span>
       </div>
     </div>
@@ -21,6 +22,7 @@
     </form>
   </div>
 </template>
+
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
@@ -90,66 +92,91 @@ const updateMessageTimes = () => {
   }));
 };
 
+const deleteMessage = async (messageID) => {
+  try {
+    console.log(`Attempting to delete message with ID: ${messageID}`);
+    await axios.delete(`/v1/message/${messageID}`);
+    messages.value = messages.value.filter(message => message.id !== messageID);
+    console.log(`Message deleted with ID: ${messageID}`);
+  } catch (err) {
+    console.error("Error deleting message:", err);
+  }
+};
+
 // WebSocket connection logic
 const connectWebSocket = (chatID, token) => {
   const wsURL = `ws://${apiUrl}/v1/chat/${chatID}?token=${encodeURIComponent(token)}`;
   ws = new WebSocket(wsURL);
 
   ws.onopen = () => {
-    console.log('WebSocket connection established');
-    isConnected.value = true;
-    retryAttempt = 0;
-    isLoading.value = false;
+  console.log('WebSocket connection established');
+  isConnected.value = true;
+  retryAttempt = 0;
+  isLoading.value = false;
 
-    // Resend unsent messages
-    const unsentMessages = messages.value.filter(msg => msg.status === false && msg.isOwnMessage);
-    unsentMessages.forEach(message => {
-      ws.send(JSON.stringify({ message: message.message, username }));
-      message.status = true;
-      console.log('Resent message:', message);
-    });
-    removeOfflineMessages();
-  };
+  // Resend unsent messages
+  const unsentMessages = messages.value.filter(msg => msg.status === false && msg.isOwnMessage);
+  unsentMessages.forEach(message => {
+    ws.send(JSON.stringify({ message: message.message, username }));
+    message.status = true;
+    console.log('Resent message:', message);
+  });
+  removeOfflineMessages();
+};
 
-  
-  ws.onmessage = (event) => {
+ws.onerror = (error) => {
+  console.error('WebSocket error:', error);
+  isConnected.value = false;
+};
+
+ws.onclose = () => {
+  console.log('WebSocket connection closed');
+  isConnected.value = false;
+  if (retryAttempt < maxRetries) {
+    setTimeout(() => {
+      retryAttempt++;
+      console.log(`Reconnecting... Attempt ${retryAttempt}`);
+      connectWebSocket(chatID, token);
+    }, Math.min(1000 * Math.pow(2, retryAttempt), 30000));
+  } else {
+    console.error('Max reconnection attempts reached.');
+  }
+};
+ws.onmessage = (event) => {
   const message = JSON.parse(event.data);
   console.log('Received message:', message);
 
-  messages.value.push({
-    ...message,
-    isOwnMessage: message.username === username,
-    profile_picture: `/${message.profile_picture}`
-  });
-  console.log('Updated messages array:', messages.value);
+  if (message.type === 'MESSAGE_DELETED') {
+    console.log('Message deleted:', message.message_id);
 
-  // Mark notifications as read if in chat
+    // Ensure message is removed from the array
+    const index = messages.value.findIndex(msg => msg.id == message.message_id);
+    console.log('Index of message to be deleted:', index);
+
+    if (index !== -1) {
+      messages.value.splice(index, 1);
+      console.log('Message deleted from array. Current messages:', messages.value);
+    } else {
+      console.error('Message ID not found in the array');
+    }
+  } else {
+    if (message.id && message.username !== username) {
+      if (!messages.value.some(msg => msg.id == message.id)) { 
+        console.log('Adding new message to array:', message);
+        messages.value.push({
+          ...message,
+          isOwnMessage: message.username === username,
+          profile_picture: `/${message.profile_picture}`
+        });
+        console.log('Current messages array after addition:', messages.value);
+      }
+    }
+  }
   if (route.params.chatID === chatID) {
     markChatNotificationsAsRead(chatID);
   }
 };
-
-
-  ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
-    isConnected.value = false;
-  };
-
-  ws.onclose = () => {
-    console.log('WebSocket connection closed');
-    isConnected.value = false;
-    if (retryAttempt < maxRetries) {
-      setTimeout(() => {
-        retryAttempt++;
-        console.log(`Reconnecting... Attempt ${retryAttempt}`);
-        connectWebSocket(chatID, token);
-      }, Math.min(1000 * Math.pow(2, retryAttempt), 30000));
-    } else {
-      console.error('Max reconnection attempts reached.');
-    }
-  };
 };
-
 
 // Fetch chat history
 const fetchChatHistory = async (chatID) => {
@@ -218,16 +245,37 @@ onUnmounted(() => {
 });
 
 // Send a message function
-const sendMessage = () => {
+const sendMessage = async () => {
   const message = {
     username,
     message: newMessage.value,
     created_at: new Date().toISOString()
   };
+
   if (ws && isConnected.value) {
     ws.send(JSON.stringify(message));
-    messages.value.push({ ...message, isOwnMessage: true, status: true });
     console.log('Message sent:', message);
+
+    const receiveResponse = new Promise((resolve, reject) => {
+      const responseHandler = (event) => {
+        const response = JSON.parse(event.data);
+        if (response.id) {
+          ws.removeEventListener('message', responseHandler);
+          resolve(response.id);
+        } else {
+          reject("Message ID not received");
+        }
+      };
+      ws.addEventListener('message', responseHandler);
+    });
+    try {
+      const messageID = await receiveResponse;
+      console.log("Received message ID:", messageID);
+      // Add the message with the real ID
+      messages.value.push({ ...message, id: messageID, isOwnMessage: true, status: true });
+    } catch (error) {
+      console.error("Error receiving message ID:", error);
+    }
   } else {
     messages.value.push({ ...message, isOwnMessage: true, status: false });
     saveOfflineMessages();
