@@ -3,8 +3,8 @@
     <h2>Chat with {{ chatUser }}</h2>
     <div v-if="formattedMessages.length === 0 && !isLoading">No messages yet</div>
     <div v-if="!isLoading">
-      <div v-for="message in formattedMessages" :key="message.id"> <!-- Key bound to message.id -->
-        <strong v-if="message.username && !message.isOwnMessage">
+      <div v-for="message in formattedMessages" :key="message.id">
+        <strong v-if="message.username && !message.isOwnMessage" @click="goToProfile(message.username)">
           <img :src="message.profile_picture" alt="Profile Picture" width="30" height="30" />
           {{ message.username }}
         </strong>
@@ -27,7 +27,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import axios from 'axios';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { userStore } from '@/stores/user';
 
 const apiUrl = import.meta.env.VITE_WS_URL;
@@ -36,6 +36,7 @@ const newMessage = ref('');
 const isLoading = ref(true);
 const isConnected = ref(false);
 const route = useRoute();
+const router = useRouter();
 const store = userStore();
 const username = store.user.username;
 let ws;
@@ -43,6 +44,10 @@ let retryAttempt = 0;
 const maxRetries = 10;
 const offlineStorageKey = `offline-messages-${route.params.chatID}`;
 const chatUser = ref('');
+
+const goToProfile = (username) => {
+  router.push({ name: 'userprofile', params: { username }})
+};
 
 // Compute formatted messages
 const formattedMessages = computed(() => {
