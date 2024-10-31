@@ -15,7 +15,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/vaanskii/vansify/db"
 	"github.com/vaanskii/vansify/models"
-	"github.com/vaanskii/vansify/notifications"
+	notifications "github.com/vaanskii/vansify/notifications/chat_notifications"
 	"github.com/vaanskii/vansify/utils"
 )
 

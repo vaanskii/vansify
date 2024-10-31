@@ -7,7 +7,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/vaanskii/vansify/db"
-	"github.com/vaanskii/vansify/notifications"
+	chat_notifications "github.com/vaanskii/vansify/notifications/chat_notifications"
 	auth "github.com/vaanskii/vansify/services/auth"
 	"github.com/vaanskii/vansify/services/chat"
 	follow "github.com/vaanskii/vansify/services/follow"
@@ -61,7 +61,7 @@ func main() {
 		v1.GET("/is-following/:follower/:following", auth.AuthMiddleware(), follow.CheckFollowStatus)
 		v1.GET("/followers/:username", auth.AuthMiddleware(), follow.GetFollowers)
 		v1.GET("/following/:username", auth.AuthMiddleware(), follow.GetFollowing)
-		v1.GET("/notifications/ws", auth.AuthMiddleware(), notifications.NotificationWsHandler)
+		v1.GET("/notifications/ws", auth.AuthMiddleware(), chat_notifications.NotificationWsHandler)
 
 
 		// Chat routes
@@ -69,8 +69,8 @@ func main() {
 		v1.GET("/chat/:chatID", auth.AuthMiddleware(), chat.WsHandler)
 		v1.GET("/chat/:chatID/history", auth.AuthMiddleware(), chat.GetChatHistory)
 		v1.GET("/check-chat/:user1/:user2", auth.AuthMiddleware(), chat.CheckChatExists)
-		v1.GET("/notifications/unread", auth.AuthMiddleware(), notifications.GetUnreadNotifications)
-		v1.POST("/notifications/mark-read/:chatID", auth.AuthMiddleware(), notifications.MarkChatNotificationsAsRead)
+		v1.GET("/notifications/unread", auth.AuthMiddleware(), chat_notifications.GetUnreadNotifications)
+		v1.POST("/notifications/mark-read/:chatID", auth.AuthMiddleware(), chat_notifications.MarkChatNotificationsAsRead)
 		v1.DELETE("/chat/:chatID", auth.AuthMiddleware(), chat.DeleteChat)
 		v1.DELETE("/message/:messageID", auth.AuthMiddleware(), chat.DeleteMessage)
 
