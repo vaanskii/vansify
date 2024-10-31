@@ -5,6 +5,8 @@ import RegisterView from '../views/RegisterView.vue';
 import ProfileView from '../views/ProfileView.vue';
 import Chat from '../views/Chat.vue';
 import ChatListView from '../views/ChatListView.vue';
+import ForgotPassword from '@/views/ForgotPassword.vue';
+import ResetPassword from '@/views/ResetPassword.vue';
 
 const routes = [
   {
@@ -52,6 +54,22 @@ const routes = [
       title: 'Chat'
     }
   },
+  {
+    path: '/forgot-password',
+    name: 'forgot',
+    component: ForgotPassword,
+    meta: {
+      title: 'Forgot Password'
+    }
+  },
+  {
+    path: '/reset-password',
+    name: 'reset',
+    component: ResetPassword,
+    meta: {
+      title: 'Reset Password'
+    }
+  }
 ];
 
 const router = createRouter({

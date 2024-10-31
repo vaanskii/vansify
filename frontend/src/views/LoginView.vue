@@ -10,6 +10,9 @@
         <input type="password" v-model="password" id="password" required>
       </div>
       <div>
+        <router-link to="/forgot-password">Forgot Password?</router-link>
+      </div>
+      <div>
         <label>
           <input type="checkbox" v-model="rememberMe">
           Remember Me

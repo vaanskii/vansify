@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -51,7 +52,7 @@ func ForgotPassword(c *gin.Context) {
 
     claims := &utils.CustomClaims{
         RegisteredClaims: jwt.RegisteredClaims{
-            ExpiresAt: jwt.NewNumericDate(time.Now().Add(1 * time.Hour)),
+            ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Second)),
             Subject:   strconv.FormatInt(user.ID, 10),
         },
     }
@@ -62,7 +63,13 @@ func ForgotPassword(c *gin.Context) {
         return
     }
 
-    resetLink := "http://localhost:8080/v1/reset-password?token=" + tokenString
+    // Extract the origin from the request
+    frontendURL := c.Request.Header.Get("Origin")
+    if frontendURL == "" {
+        frontendURL = "http://localhost:5173" 
+    }
+
+    resetLink := frontendURL + "/reset-password?token=" + tokenString
     err = sendResetPasswordEmail(user.Email, resetLink)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error sending email"})
@@ -77,10 +84,14 @@ func ResetPassword(c *gin.Context) {
         Token       string `json:"token"`
         NewPassword string `json:"new_password"`
     }
+
     if err := c.ShouldBindJSON(&request); err != nil {
+        log.Printf("Error binding JSON: %v\n", err) // Logging the error
         c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
         return
     }
+
+    log.Printf("Received token: %s, new password: %s\n", request.Token, request.NewPassword)
 
     token, err := jwt.ParseWithClaims(request.Token, &utils.CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
         return []byte(os.Getenv("JWT_SECRET")), nil
@@ -96,6 +107,18 @@ func ResetPassword(c *gin.Context) {
         return
     }
 
+    // Check if the token has already been used
+    var tokenCount int
+    err = db.DB.QueryRow("SELECT COUNT(*) FROM used_tokens WHERE token = ?", request.Token).Scan(&tokenCount)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking token"})
+        return
+    }
+    if tokenCount > 0 {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Token has already been used"})
+        return
+    }
+
     userID, err := strconv.ParseInt(claims.Subject, 10, 64)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error parsing user ID"})
@@ -103,6 +126,18 @@ func ResetPassword(c *gin.Context) {
     }
 
     var user models.User
+    err = db.DB.QueryRow("SELECT id, password FROM users WHERE id = ?", userID).Scan(&user.ID, &user.Password)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving user"})
+        return
+    }
+
+    // Check if the new password is the same as the current password
+    if user.CheckPassword(request.NewPassword) {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "New password must be different from the current password"})
+        return
+    }
+
     user.Password = request.NewPassword
     if err := user.HashPassword(); err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error hashing password"})
@@ -112,6 +147,13 @@ func ResetPassword(c *gin.Context) {
     _, err = db.DB.Exec("UPDATE users SET password = ? WHERE id = ?", user.Password, userID)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error updating password"})
+        return
+    }
+
+    // Mark the token as used
+    _, err = db.DB.Exec("INSERT INTO used_tokens (token) VALUES (?)", request.Token)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error invalidating token"})
         return
     }
 
