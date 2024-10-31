@@ -34,10 +34,8 @@ const connectNotificationWebSocket = () => {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      console.log("WebSocket message received:", data);  // Log received WebSocket message
       if (data.unread_count !== undefined) {
         unreadCount.value = data.unread_count;
-        console.log("Updated unread count: ", unreadCount.value);  // Log updated unread count
       }
     } catch (e) {
       console.error("Error processing WebSocket message:", e);
@@ -90,7 +88,6 @@ const fetchUnreadCount = async () => {
       headers: { Authorization: `Bearer ${token}` }
     });
     unreadCount.value = response.data.unread_count;
-    console.log("Initial unread count: ", unreadCount.value);  // Log initial unread count
   } catch (error) {
     console.error('Error fetching unread message count:', error);
   }

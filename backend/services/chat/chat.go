@@ -339,6 +339,14 @@ func DeleteChat(c *gin.Context) {
         return
     }
 
+    deleteChat := map[string]interface{}{
+        "type":    "CHAT_DELETED",
+        "chat_id": chatID,
+    }
+    broadcastMessage, _ := json.Marshal(deleteChat)
+    log.Printf("Broadcasting delete chat: %s", broadcastMessage)
+    hub.BroadcastMessage(nil, websocket.TextMessage, broadcastMessage)
+
     c.JSON(http.StatusOK, gin.H{"message": "Chat deleted successfully"})
 }
 
@@ -380,7 +388,7 @@ func DeleteMessage(c *gin.Context) {
     }
     broadcastMessage, _ := json.Marshal(deleteMessage)
     log.Printf("Broadcasting delete message: %s", broadcastMessage)
-    hub.BroadcastMessage(nil, websocket.TextMessage, broadcastMessage)  // Ensure this broadcasts to everyone
+    hub.BroadcastMessage(nil, websocket.TextMessage, broadcastMessage) 
 
     c.JSON(http.StatusOK, gin.H{"message": "Message deleted successfully"})
 }

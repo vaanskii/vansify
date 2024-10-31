@@ -45,7 +45,6 @@ const fetchChats = async () => {
     } else {
       chats.value = [];
     }
-    console.log("Fetched chats with unread counts:", chats.value);
   } catch (err) {
     error.value = err.response ? err.response.data.error : 'An error occurred';
     console.error("Error fetching chats:", err);
@@ -63,7 +62,6 @@ const deleteChat = async (chatID) => {
 
 // Sort chats by the last received message time
 const sortedChats = computed(() => {
-  console.log("Sorting chats based on last message time", chats.value);  // Debug to ensure sorting
   return chats.value.slice().sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
 });
 
@@ -94,9 +92,6 @@ const connectNotificationWebSocket = () => {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      console.log("WebSocket message received:", data);
-      console.log("Profile picture URL:", data.profile_picture); // Log the profile picture URL
-
       // Check if the chat already exists in the list
       const chatIndex = chats.value.findIndex(chat => chat.chat_id === data.chat_id);
       if (chatIndex !== -1) {
@@ -107,7 +102,7 @@ const connectNotificationWebSocket = () => {
           last_message_time: data.last_message_time || new Date().toISOString(),
           message: data.message,
           user: data.user,
-          profile_picture: data.profile_picture  // Ensure profile picture is updated
+          profile_picture: data.profile_picture  
         };
       } else {
         // Add new chat
@@ -117,13 +112,11 @@ const connectNotificationWebSocket = () => {
           unread_count: data.unread_count,
           last_message_time: data.last_message_time || new Date().toISOString(),
           message: data.message,
-          profile_picture: data.profile_picture  // Ensure profile picture is set
+          profile_picture: data.profile_picture
         });
       }
-
       // Trigger sort
       chats.value = chats.value.slice().sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
-      console.log("Updated sorted chat list:", chats.value);
     } catch (e) {
       console.error("Error processing WebSocket message:", e);
     }

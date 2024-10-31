@@ -94,10 +94,8 @@ const updateMessageTimes = () => {
 
 const deleteMessage = async (messageID) => {
   try {
-    console.log(`Attempting to delete message with ID: ${messageID}`);
     await axios.delete(`/v1/message/${messageID}`);
     messages.value = messages.value.filter(message => message.id !== messageID);
-    console.log(`Message deleted with ID: ${messageID}`);
   } catch (err) {
     console.error("Error deleting message:", err);
   }
@@ -144,31 +142,22 @@ ws.onclose = () => {
 };
 ws.onmessage = (event) => {
   const message = JSON.parse(event.data);
-  console.log('Received message:', message);
-
   if (message.type === 'MESSAGE_DELETED') {
-    console.log('Message deleted:', message.message_id);
-
     // Ensure message is removed from the array
     const index = messages.value.findIndex(msg => msg.id == message.message_id);
-    console.log('Index of message to be deleted:', index);
-
     if (index !== -1) {
       messages.value.splice(index, 1);
-      console.log('Message deleted from array. Current messages:', messages.value);
     } else {
       console.error('Message ID not found in the array');
     }
   } else {
     if (message.id && message.username !== username) {
       if (!messages.value.some(msg => msg.id == message.id)) { 
-        console.log('Adding new message to array:', message);
         messages.value.push({
           ...message,
           isOwnMessage: message.username === username,
           profile_picture: `/${message.profile_picture}`
         });
-        console.log('Current messages array after addition:', messages.value);
       }
     }
   }
@@ -184,7 +173,6 @@ const fetchChatHistory = async (chatID) => {
     const response = await axios.get(`/v1/chat/${chatID}/history?user=${route.query.user}`);
     if (response.data) {
       const newMessages = response.data.map(message => {
-        console.log('Profile Picture:', message.profile_picture); 
         return {
           ...message,
           isOwnMessage: message.username === username,
@@ -216,7 +204,6 @@ const markChatNotificationsAsRead = async (chatID) => {
     await axios.post(`/v1/notifications/mark-read/${chatID}`, null, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    console.log(`Notifications for chat ${chatID} marked as read`);
   } catch (error) {
     console.error('Error marking notifications as read:', error);
   }
@@ -254,8 +241,6 @@ const sendMessage = async () => {
 
   if (ws && isConnected.value) {
     ws.send(JSON.stringify(message));
-    console.log('Message sent:', message);
-
     const receiveResponse = new Promise((resolve, reject) => {
       const responseHandler = (event) => {
         const response = JSON.parse(event.data);
@@ -270,7 +255,6 @@ const sendMessage = async () => {
     });
     try {
       const messageID = await receiveResponse;
-      console.log("Received message ID:", messageID);
       // Add the message with the real ID
       messages.value.push({ ...message, id: messageID, isOwnMessage: true, status: true });
     } catch (error) {
@@ -279,7 +263,6 @@ const sendMessage = async () => {
   } else {
     messages.value.push({ ...message, isOwnMessage: true, status: false });
     saveOfflineMessages();
-    console.log('Message saved as offline:', message);
   }
   newMessage.value = '';
 };
@@ -292,7 +275,6 @@ watch(isConnected, (newVal) => {
     unsentMessages.forEach(message => {
       ws.send(JSON.stringify({ message: message.message, username }));
       message.status = true;
-      console.log('Resent unsent message:', message);
     });
     removeOfflineMessages();
   }

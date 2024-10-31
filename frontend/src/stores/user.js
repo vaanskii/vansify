@@ -76,7 +76,6 @@ export const userStore = defineStore({
       const jwtToken = JSON.parse(atob(this.user.access.split(".")[1]));
       const expires = new Date(jwtToken.exp * 1000);
       const timeout = expires.getTime() - Date.now() - 60 * 1000;
-      console.log("Setting refresh timer for:", timeout / 1000, "seconds");
       this.refreshTokenTimeout = setTimeout(this.refreshToken, timeout);
     },
     stopRefreshTokenTimer() {
