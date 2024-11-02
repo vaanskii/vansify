@@ -1,31 +1,36 @@
 <template>
-  <div>
+  <div class="chat-container">
     <h2>Chat with {{ chatUser }}</h2>
-    <div v-if="formattedMessages.length === 0 && !isLoading">No messages yet</div>
-    <div v-if="!isLoading">
-      <div v-for="message in formattedMessages" :key="message.id">
-        <strong v-if="message.username && !message.isOwnMessage" @click="goToProfile(message.username)">
-          <img :src="message.profile_picture" alt="Profile Picture" width="30" height="30" />
-          {{ message.username }}
-        </strong>
-        {{ message.message }} - {{ formatTime(message.created_at) }}
-        <span v-if="message.isOwnMessage">
-          <span v-if="message.status === true">(Sent)</span>
-          <span v-if="message.status === false">(Not Sent)</span>
-          <button @click="deleteMessage(message.id)">Delete</button>
-        </span>
+    <div v-if="formattedMessages.length === 0 && !isLoading" class="no-messages">No messages yet</div>
+    <div v-if="!isLoading" class="messages-container" ref="messagesContainer">
+      <div v-for="message in formattedMessages" :key="message.id" :class="{'message': true, 'sent': message.isOwnMessage, 'received': !message.isOwnMessage}">
+        <div class="message-header" v-if="message.username && !message.isOwnMessage" @click="goToProfile(message.username)">
+          <img :src="message.profile_picture" alt="Profile Picture" class="profile-picture" />
+          <strong>{{ message.username }}</strong>
+        </div>
+        <div class="message-body">
+          {{ message.message }}
+        </div>
+        <div class="message-footer">
+          <span v-if="message.isOwnMessage">
+            <span v-if="message.status === true">(Sent)</span> 
+            <span v-if="message.status === false">(Not Sent)</span>
+          </span>
+          <span>{{ formatTime(message.created_at) }}</span>
+          <button v-if="message.isOwnMessage" @click="deleteMessage(message.id)" class="delete-button">Delete</button>
+        </div>
       </div>
     </div>
-    <form @submit.prevent="sendMessage" v-if="!isLoading">
-      <input v-model="newMessage" placeholder="Type a message" required />
-      <button type="submit">Send</button>
+    <form @submit.prevent="sendMessage" v-if="!isLoading" class="message-form">
+      <input v-model="newMessage" placeholder="Type a message" required class="message-input" />
+      <button type="submit" class="send-button">Send</button>
     </form>
   </div>
 </template>
 
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
 import axios from 'axios';
 import { useRoute, useRouter } from 'vue-router';
 import { userStore } from '@/stores/user';
@@ -44,9 +49,17 @@ let retryAttempt = 0;
 const maxRetries = 10;
 const offlineStorageKey = `offline-messages-${route.params.chatID}`;
 const chatUser = ref('');
+const messagesContainer = ref(null);
 
 const goToProfile = (username) => {
   router.push({ name: 'userprofile', params: { username }})
+};
+
+const scrollToBottom = () => {
+  const container = messagesContainer.value;
+  if (container) {
+    container.scrollTop = container.scrollHeight;
+  }
 };
 
 // Compute formatted messages
@@ -226,6 +239,7 @@ onMounted(async () => {
     await markChatNotificationsAsRead(chatID);
 
     setInterval(updateMessageTimes, 60000);
+    nextTick(scrollToBottom);
   } else {
     isLoading.value = false;
   }
@@ -270,6 +284,7 @@ const sendMessage = async () => {
     saveOfflineMessages();
   }
   newMessage.value = '';
+  nextTick(scrollToBottom);
 };
 
 
@@ -284,4 +299,117 @@ watch(isConnected, (newVal) => {
     removeOfflineMessages();
   }
 });
+watch(messages, () => {
+  nextTick(scrollToBottom)
+})
 </script>
+
+
+<style scoped>
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  background-color: #f9f9f9;
+  margin-top: 200px;
+}
+
+.no-messages {
+  text-align: center;
+  color: #888;
+}
+
+.messages-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 400px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border-radius: 10px;
+  word-wrap: break-word;
+  max-width: 60%;
+}
+
+.sent {
+  align-self: flex-end;
+  background-color: #daf8cb;
+}
+
+.received {
+  align-self: flex-start;
+  background-color: #e4e6eb;
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.profile-picture {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  margin-right: 10px;
+}
+
+.message-body {
+  font-size: 14px;
+}
+
+.message-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #888;
+}
+
+.message-form {
+  display: flex;
+}
+
+.message-input {
+  flex-grow: 1;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  margin-right: 10px;
+}
+
+.send-button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.send-button:hover {
+  background-color: #0056b3;
+}
+
+.delete-button {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 5px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.delete-button:hover {
+  background-color: #c82333;
+}
+</style>

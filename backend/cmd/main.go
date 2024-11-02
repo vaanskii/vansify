@@ -7,7 +7,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/vaanskii/vansify/db"
-	chat_notifications "github.com/vaanskii/vansify/notifications/chat"
+	chat_notifications "github.com/vaanskii/vansify/notifications"
 	auth "github.com/vaanskii/vansify/services/auth"
 	"github.com/vaanskii/vansify/services/chat"
 	follow "github.com/vaanskii/vansify/services/follow"

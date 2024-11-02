@@ -163,7 +163,7 @@ func GetUserChats(c *gin.Context) {
 
         // Get unread message count for each chat
         var unreadCount int
-        err = db.DB.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND chat_id = ? AND is_read = false", userID, chatID).Scan(&unreadCount)
+        err = db.DB.QueryRow("SELECT COUNT(*) FROM chat_notifications WHERE user_id = ? AND chat_id = ? AND is_read = false", userID, chatID).Scan(&unreadCount)
         if err != nil {
             log.Printf("Error fetching unread count: %v\n", err)
             c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching unread count"})

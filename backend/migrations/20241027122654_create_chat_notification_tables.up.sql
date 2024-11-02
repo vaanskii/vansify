@@ -1,4 +1,4 @@
-CREATE TABLE notifications (
+CREATE TABLE chat_notifications (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     chat_id VARCHAR(255) NOT NULL,

@@ -14,7 +14,7 @@ import (
 
 func NotifyNewMessage(userID int64, message models.Message) {
     log.Printf("Inserting notification for userID: %d, message: %s", userID, message.Message)
-    _, err := db.DB.Exec("INSERT INTO notifications (user_id, message, chat_id, is_read) VALUES (?, ?, ?, false)", userID, message.Message, message.ChatID)
+    _, err := db.DB.Exec("INSERT INTO chat_notifications (user_id, message, chat_id, is_read) VALUES (?, ?, ?, false)", userID, message.Message, message.ChatID)
     if err != nil {
         log.Printf("Error saving notification: %v", err)
         return
@@ -22,7 +22,7 @@ func NotifyNewMessage(userID int64, message models.Message) {
 
     // Get the unread message count for this user in the specific chat
     var chatUnreadCount int
-    err = db.DB.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND chat_id = ? AND is_read = false", userID, message.ChatID).Scan(&chatUnreadCount)
+    err = db.DB.QueryRow("SELECT COUNT(*) FROM chat_notifications WHERE user_id = ? AND chat_id = ? AND is_read = false", userID, message.ChatID).Scan(&chatUnreadCount)
     if err != nil {
         log.Printf("Error getting unread message count for chat: %v", err)
         return
@@ -43,14 +43,14 @@ func NotifyNewMessage(userID int64, message models.Message) {
 
 func GetTotalUnreadMessageCount(userID int64) (int, error) {
     var count int
-    err := db.DB.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = false", userID).Scan(&count)
+    err := db.DB.QueryRow("SELECT COUNT(*) FROM chat_notifications WHERE user_id = ? AND is_read = false", userID).Scan(&count)
     return count, err
 }
 
 
 func GetUnreadChatMessagesCount(userID int64, chatID string) (int, error) {
     var count int
-    err := db.DB.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND chat_id = ? AND is_read = false", userID, chatID).Scan(&count)
+    err := db.DB.QueryRow("SELECT COUNT(*) FROM chat_notifications WHERE user_id = ? AND chat_id = ? AND is_read = false", userID, chatID).Scan(&count)
     return count, err
 }
 func GetUnreadNotifications(c *gin.Context) {
@@ -98,7 +98,7 @@ func MarkChatNotificationsAsRead(c *gin.Context) {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving user ID"})
         return
     }
-    _, err = db.DB.Exec("DELETE FROM notifications WHERE user_id = ? AND chat_id = ?", userID, chatID)
+    _, err = db.DB.Exec("DELETE FROM chat_notifications WHERE user_id = ? AND chat_id = ?", userID, chatID)
     if err != nil {
         log.Printf("Error deleting notifications for chat: %v\n", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting notifications for chat"})
