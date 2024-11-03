@@ -46,16 +46,23 @@ ARG DB_PASS
 ARG DB_HOST
 ARG DB_PORT
 ARG DB_NAME
+ARG JWT_SECRET
+ARG SMTP_SERVER
+ARG SMTP_PORT
+ARG SMTP_USER
+ARG SMTP_PASS
 
-# Pass arguments as environment variables
+# Set environment variables using the ARG values
 ENV DB_USER=${DB_USER}
 ENV DB_PASS=${DB_PASS}
 ENV DB_HOST=${DB_HOST}
 ENV DB_PORT=${DB_PORT}
 ENV DB_NAME=${DB_NAME}
-
-# Add a comment to invalidate cache
-# Cache invalidated
+ENV JWT_SECRET=${JWT_SECRET}
+ENV SMTP_SERVER=${SMTP_SERVER}
+ENV SMTP_PORT=${SMTP_PORT}
+ENV SMTP_USER=${SMTP_USER}
+ENV SMTP_PASS=${SMTP_PASS}
 
 # Run migrations
 RUN make up
