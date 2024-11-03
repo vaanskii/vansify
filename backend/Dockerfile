@@ -1,5 +1,5 @@
 # Stage 1: Build the Go app
-FROM golang:1.17 as builder
+FROM golang:1.23.1 as builder
 
 # Set the Current Working Directory inside the container
 WORKDIR /app
@@ -19,15 +19,17 @@ RUN go build -o main ./cmd
 # Stage 2: Run the Go app
 FROM debian:buster
 
-# Install dependencies for running migrations
+# Install dependencies for running migrations and building the app
 RUN apt-get update && apt-get install -y \
     wget \
-    ca-certificates
+    ca-certificates \
+    tar \
+    make  # Install make
 
-# Install migrate CLI
+# Download and extract migrate CLI
 RUN wget -O migrate.tar.gz https://github.com/golang-migrate/migrate/releases/download/v4.15.1/migrate.linux-amd64.tar.gz && \
     tar -xvzf migrate.tar.gz && \
-    mv migrate.linux-amd64 /usr/local/bin/migrate && \
+    mv migrate /usr/local/bin/migrate && \
     chmod +x /usr/local/bin/migrate && \
     rm migrate.tar.gz
 
@@ -37,7 +39,23 @@ WORKDIR /root/
 COPY --from=builder /app/main .
 COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/Makefile ./
-COPY --from=builder /app/.env ./
+
+# Define build-time arguments
+ARG DB_USER
+ARG DB_PASS
+ARG DB_HOST
+ARG DB_PORT
+ARG DB_NAME
+
+# Pass arguments as environment variables
+ENV DB_USER=${DB_USER}
+ENV DB_PASS=${DB_PASS}
+ENV DB_HOST=${DB_HOST}
+ENV DB_PORT=${DB_PORT}
+ENV DB_NAME=${DB_NAME}
+
+# Add a comment to invalidate cache
+# Cache invalidated
 
 # Run migrations
 RUN make up
