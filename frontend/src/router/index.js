@@ -8,6 +8,7 @@ import ChatListView from '../views/ChatListView.vue';
 import ForgotPassword from '@/views/ForgotPassword.vue';
 import ResetPassword from '@/views/ResetPassword.vue';
 import VerifyRegister from '@/views/VerifyRegister.vue';
+import { userStore } from '@/stores/user';
 
 const routes = [
   {
@@ -88,6 +89,11 @@ const router = createRouter({
 
 // Navigation guard to update document title
 router.beforeEach((to, from, next) => {
+  const store = userStore();
+  const isAuthenticated = store.user.isAuthenticated;
+
+  if ((to.name === 'login' || to.name === 'register') && isAuthenticated) { next({ name: 'home' }); }
+
   if (to.name === 'userprofile') {
     document.title = `${to.params.username} • Vansify`;
   } else {
