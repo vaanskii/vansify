@@ -18,6 +18,7 @@
       <button v-if="!isCurrentUser && isAuthenticated" @click="handleChat">
         Chat
       </button>
+      <button v-if="isCurrentUser && isAuthenticated" @click="deleteProfile">Delete Profile</button>
       <!-- Followers List -->
       <div v-if="showFollowers">
         <h3>Followers</h3>
@@ -82,6 +83,15 @@ const fetchFollowers = async (username) => {
     followers.value = response.data.followers;
   } catch (error) {
     console.error('Error fetching followers:', error);
+  }
+};
+
+const deleteProfile = async () => {
+  try {
+    await axios.delete(`/v1/delete-account`);
+    router.push({ path: '/login' });
+  } catch (error) {
+    console.error('Error deleting profile:', error);
   }
 };
 

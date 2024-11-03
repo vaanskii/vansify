@@ -7,6 +7,7 @@ import Chat from '../views/Chat.vue';
 import ChatListView from '../views/ChatListView.vue';
 import ForgotPassword from '@/views/ForgotPassword.vue';
 import ResetPassword from '@/views/ResetPassword.vue';
+import VerifyRegister from '@/views/VerifyRegister.vue';
 
 const routes = [
   {
@@ -68,6 +69,14 @@ const routes = [
     component: ResetPassword,
     meta: {
       title: 'Reset Password'
+    }
+  },
+  {
+    path: '/verify',
+    name: 'verify',
+    component: VerifyRegister,
+    meta: {
+      title: 'Verify Email'
     }
   }
 ];
