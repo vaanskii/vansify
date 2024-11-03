@@ -89,6 +89,7 @@ const fetchFollowers = async (username) => {
 const deleteProfile = async () => {
   try {
     await axios.delete(`/v1/delete-account`);
+    store.removeToken();
     router.push({ path: '/login' });
   } catch (error) {
     console.error('Error deleting profile:', error);
