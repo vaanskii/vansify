@@ -24,9 +24,8 @@
       const response = await axios.get(`/v1/verify?token=${token}`);
       message.value = response.data.message;
       loading.value = false;
-      // Optionally, redirect to a different page after verification
       setTimeout(() => {
-        router.push('/login'); // Redirect to login or any other page
+        router.push('/login'); 
       }, 5000);
     } catch (err) {
       error.value = err.response.data.error || 'Verification failed. Please try again.';
