@@ -16,15 +16,15 @@ COPY . .
 # Build the Go app
 RUN go build -o main ./cmd
 
-# Stage 2: Run the Go app
-FROM debian:buster
+# Stage 2: Run the Go app using the same golang image to ensure glibc compatibility
+FROM golang:1.23.1
 
 # Install dependencies for running migrations and building the app
 RUN apt-get update && apt-get install -y \
     wget \
     ca-certificates \
     tar \
-    make  # Install make
+    make
 
 # Download and extract migrate CLI
 RUN wget -O migrate.tar.gz https://github.com/golang-migrate/migrate/releases/download/v4.15.1/migrate.linux-amd64.tar.gz && \
@@ -64,8 +64,5 @@ ENV SMTP_PORT=${SMTP_PORT}
 ENV SMTP_USER=${SMTP_USER}
 ENV SMTP_PASS=${SMTP_PASS}
 
-# Run migrations
-RUN make up
-
-# Command to run the executable
-CMD ["./main"]
+# Command to run migrations and start the application
+CMD migrate -path /root/migrations -database "mysql://${DB_USER}:${DB_PASS}@tcp(${DB_HOST}:${DB_PORT})/${DB_NAME}?parseTime=true" up && ./main
