@@ -45,7 +45,8 @@ const routes = [
     name: 'chat',
     component: Chat,
     meta: {
-      title: 'Chat'
+      title: 'Chat',
+      requiresAuth: true
     }
   },
   {
@@ -53,7 +54,8 @@ const routes = [
     name: 'chatlist',
     component: ChatListView,
     meta: {
-      title: 'Chat'
+      title: 'Chat',
+      requiresAuth: true
     }
   },
   {
@@ -87,19 +89,25 @@ const router = createRouter({
   routes
 });
 
-// Navigation guard to update document title
+// Navigation guard to update document title and check authentication
 router.beforeEach((to, from, next) => {
   const store = userStore();
   const isAuthenticated = store.user.isAuthenticated;
 
-  if ((to.name === 'login' || to.name === 'register') && isAuthenticated) { next({ name: 'home' }); }
-
-  if (to.name === 'userprofile') {
-    document.title = `${to.params.username} • Vansify`;
+  if (to.matched.some(record => record.meta.requiresAuth) && !isAuthenticated) {
+    next({ name: 'login' });
   } else {
-    document.title = to.meta.title || 'Default Title';
+    if ((to.name === 'login' || to.name === 'register') && isAuthenticated) {
+      next({ name: 'home' });
+    } else {
+      if (to.name === 'userprofile') {
+        document.title = `${to.params.username} • Vansify`;
+      } else {
+        document.title = to.meta.title || 'Default Title';
+      }
+      next();
+    }
   }
-  next();
 });
 
 export default router;
