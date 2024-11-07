@@ -8,6 +8,7 @@ import ChatListView from '../views/ChatListView.vue';
 import ForgotPassword from '@/views/ForgotPassword.vue';
 import ResetPassword from '@/views/ResetPassword.vue';
 import VerifyRegister from '@/views/VerifyRegister.vue';
+import NotificationsView from '@/views/NotificationsView.vue';
 import { userStore } from '@/stores/user';
 
 const routes = [
@@ -80,6 +81,14 @@ const routes = [
     component: VerifyRegister,
     meta: {
       title: 'Verify Email'
+    }
+  },
+  {
+    path: '/notifications',
+    name: 'notifications',
+    component: NotificationsView,
+    meta: {
+      title: 'Notifications',
     }
   }
 ];

@@ -1,11 +1,14 @@
 package follow
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vaanskii/vansify/db"
+	"github.com/vaanskii/vansify/models"
+	"github.com/vaanskii/vansify/notifications"
 	"github.com/vaanskii/vansify/utils"
 )
 
@@ -26,7 +29,7 @@ func FollowUser(c *gin.Context) {
 
     // Extract username from claims
     followerUsername := customClaims.Username // The username of the logged-in user
-    followingUsername := c.Param("username") // The username of the user to follow
+    followingUsername := c.Param("username")  // The username of the user to follow
 
     // Get follower ID from follower username
     var followerID int64
@@ -73,10 +76,44 @@ func FollowUser(c *gin.Context) {
         return
     }
 
+    // Create follow notification
+    message := followerUsername + " started following you"
+    _, err = db.DB.Exec("INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)", followingID, models.FollowNotificationType, message)
+    if err != nil {
+        log.Printf("Error creating follow notification: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating notification"})
+        return
+    }
+
+    // Broadcast notification count
+    notificationCount, err := getUnreadNotificationCount(followingID)
+    if err != nil {
+        log.Printf("Error fetching unread notification count: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching unread notification count"})
+        return
+    }
+
+    notificationMessage := map[string]int{
+        "unread_notification_count": notificationCount,
+    }
+
+    notificationJSON, err := json.Marshal(notificationMessage)
+    if err != nil {
+        log.Printf("Error marshalling notification count: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error marshalling notification count"})
+        return
+    }
+
+    notifications.GlobalNotificationHub.BroadcastNotification(notificationJSON)
+
     c.JSON(http.StatusOK, gin.H{"message": "Successfully followed user"})
 }
 
-
+func getUnreadNotificationCount(userID int64) (int, error) {
+    var count int
+    err := db.DB.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = false", userID).Scan(&count)
+    return count, err
+}
 
 func UnfollowUser(c *gin.Context) {
 	claims, exists := c.Get("claims")

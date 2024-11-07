@@ -3,7 +3,11 @@
     <button v-if="store.user.isAuthenticated" @click="logout">Logout</button>
     <button v-if="store.user.isAuthenticated" @click="goToChats">
       My Chats
-      <span v-if="unreadCount > 0">({{ unreadCount }})</span> <!-- Show total unread count -->
+      <span v-if="unreadCount > 0">({{ unreadCount }})</span>
+    </button>
+    <button v-if="store.user.isAuthenticated" @click="notifications">
+      Notifications
+      <span v-if="unreadNotificationCount > 0">({{ unreadNotificationCount }})</span>
     </button>
     <button v-if="store.user.isAuthenticated" @click="goToProfile">My Profile</button>
     <div v-else>
@@ -23,6 +27,7 @@ const apiUrl = import.meta.env.VITE_WS_URL;
 const store = userStore();
 const router = useRouter();
 const unreadCount = ref(0);
+const unreadNotificationCount = ref(0); // Unread general notifications count
 const wsUrl = `ws://${apiUrl}/v1/notifications/ws?token=${encodeURIComponent(store.user.access)}`;
 let ws;
 
@@ -36,6 +41,9 @@ const connectNotificationWebSocket = () => {
       const data = JSON.parse(event.data);
       if (data.unread_count !== undefined) {
         unreadCount.value = data.unread_count;
+      }
+      if (data.unread_notification_count !== undefined) {
+        unreadNotificationCount.value = data.unread_notification_count;
       }
     } catch (e) {
       console.error("Error processing WebSocket message:", e);
@@ -62,6 +70,10 @@ const goToProfile = () => {
   router.push(`/${store.user.username}`);
 };
 
+const notifications = () => {
+  router.push(`/notifications`);
+};
+
 const goToLogin = () => {
   router.push('/login');
 };
@@ -73,6 +85,7 @@ const goToRegister = () => {
 onMounted(() => {
   if (store.user.isAuthenticated) {
     fetchUnreadCount();
+    fetchUnreadNotificationCount();
     connectNotificationWebSocket();
   }
 });
@@ -83,13 +96,19 @@ onUnmounted(() => {
 
 const fetchUnreadCount = async () => {
   try {
-    const token = store.user.access;
-    const response = await axios.get('/v1/notifications/unread', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await axios.get('/v1/notifications/chat/unread');
     unreadCount.value = response.data.unread_count;
   } catch (error) {
     console.error('Error fetching unread message count:', error);
+  }
+};
+
+const fetchUnreadNotificationCount = async () => {
+  try {
+    const response = await axios.get('/v1/notifications/count');
+    unreadNotificationCount.value = response.data.unread_count;
+  } catch (error) {
+    console.error('Error fetching unread notifications count:', error);
   }
 };
 </script>

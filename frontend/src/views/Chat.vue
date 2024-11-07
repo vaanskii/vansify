@@ -219,7 +219,7 @@ const fetchChatHistory = async (chatID) => {
 const markChatNotificationsAsRead = async (chatID) => {
   try {
     const token = store.user.access;
-    await axios.post(`/v1/notifications/mark-read/${chatID}`, null, {
+    await axios.post(`/v1/notifications/chat/mark-read/${chatID}`, null, {
       headers: { Authorization: `Bearer ${token}` }
     });
   } catch (error) {

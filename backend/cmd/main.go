@@ -8,7 +8,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/vaanskii/vansify/db"
-	chat_notifications "github.com/vaanskii/vansify/notifications"
+	notifications "github.com/vaanskii/vansify/notifications"
 	auth "github.com/vaanskii/vansify/services/auth"
 	"github.com/vaanskii/vansify/services/chat"
 	follow "github.com/vaanskii/vansify/services/follow"
@@ -62,21 +62,27 @@ func main() {
         v1.GET("/is-following/:follower/:following", auth.AuthMiddleware(), follow.CheckFollowStatus)
         v1.GET("/followers/:username", auth.AuthMiddleware(), follow.GetFollowers)
         v1.GET("/following/:username", auth.AuthMiddleware(), follow.GetFollowing)
-        v1.GET("/notifications/ws", auth.AuthMiddleware(), chat_notifications.NotificationWsHandler)
+        v1.GET("/notifications/ws", auth.AuthMiddleware(), notifications.NotificationWsHandler)
 
         // Chat routes
         v1.POST("/create-chat", auth.AuthMiddleware(), chat.CreateChat)
         v1.GET("/chat/:chatID", auth.AuthMiddleware(), chat.WsHandler)
         v1.GET("/chat/:chatID/history", auth.AuthMiddleware(), chat.GetChatHistory)
         v1.GET("/check-chat/:user1/:user2", auth.AuthMiddleware(), chat.CheckChatExists)
-        v1.GET("/notifications/unread", auth.AuthMiddleware(), chat_notifications.GetUnreadNotifications)
-        v1.POST("/notifications/mark-read/:chatID", auth.AuthMiddleware(), chat_notifications.MarkChatNotificationsAsRead)
+        v1.GET("/notifications/chat/unread", auth.AuthMiddleware(), notifications.GetUnreadChatNotifications)
+        v1.POST("/notifications/chat/mark-read/:chatID", auth.AuthMiddleware(), notifications.MarkChatNotificationsAsRead)
         v1.DELETE("/chat/:chatID", auth.AuthMiddleware(), chat.DeleteChat)
         v1.DELETE("/message/:messageID", auth.AuthMiddleware(), chat.DeleteMessage)
 
         // User Profile Retrieval
         v1.GET("/me/chats", auth.AuthMiddleware(), user.GetUserChats)
         v1.GET("/user/:username", user.GetUserByUsername)
+
+        // General Notifications
+        v1.GET("/notifications", auth.AuthMiddleware(), notifications.GetNotifications)
+        v1.GET("/notifications/count", auth.AuthMiddleware(), notifications.GetUnreadNotificationCount) 
+        v1.POST("/notifications/general/mark-read/:notificationID", auth.AuthMiddleware(), notifications.MarkNotificationAsRead)
+        v1.DELETE("/notifications/delete/:notificationID", auth.AuthMiddleware(), notifications.DeleteNotification)
     }
 
     r.GET("/", func(c *gin.Context) {

@@ -53,7 +53,7 @@ func GetUnreadChatMessagesCount(userID int64, chatID string) (int, error) {
     err := db.DB.QueryRow("SELECT COUNT(*) FROM chat_notifications WHERE user_id = ? AND chat_id = ? AND is_read = false", userID, chatID).Scan(&count)
     return count, err
 }
-func GetUnreadNotifications(c *gin.Context) {
+func GetUnreadChatNotifications(c *gin.Context) {
     claims, exists := c.Get("claims")
     if !exists {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
