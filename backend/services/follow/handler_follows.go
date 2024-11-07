@@ -28,8 +28,8 @@ func FollowUser(c *gin.Context) {
     }
 
     // Extract username from claims
-    followerUsername := customClaims.Username // The username of the logged-in user
-    followingUsername := c.Param("username")  // The username of the user to follow
+    followerUsername := customClaims.Username
+    followingUsername := c.Param("username")
 
     // Get follower ID from follower username
     var followerID int64
