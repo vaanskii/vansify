@@ -96,7 +96,7 @@ func CreateChat(c *gin.Context) {
 }
 
 // WsHandler which is handling ws connections
-func WsHandler(c *gin.Context) {
+func ChatWsHandler(c *gin.Context) {
     chatID := c.Param("chatID")
     token := c.Query("token")
     log.Printf("Attempting to upgrade connection for chatID: %s with token: %s", chatID, token)
