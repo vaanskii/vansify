@@ -54,7 +54,6 @@ func GetNotifications(c *gin.Context) {
 
         var profilePicture string
         if followerID.Valid {
-            // Fetch profile picture for the user who followed (follower_id)
             err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE id = ?", followerID.Int64).Scan(&profilePicture)
             if err != nil {
                 log.Printf("Error fetching profile picture for user ID %d: %v\n", followerID.Int64, err)
@@ -71,7 +70,7 @@ func GetNotifications(c *gin.Context) {
             "message":         notification.Message,
             "is_read":         notification.IsRead,
             "created_at":      formattedTime,
-            "profile_picture": profilePicture,
+            "profile_picture":  profilePicture,
         })
     }
 

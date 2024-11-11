@@ -13,21 +13,17 @@ import (
 )
 
 func FollowUser(c *gin.Context) {
-    // Retrieve the claims from the context set by the middleware
     claims, exists := c.Get("claims")
     if !exists {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "No claims found"})
         return
     }
-
-    // Assuming claims is of type *utils.CustomClaims
     customClaims, ok := claims.(*utils.CustomClaims)
     if !ok {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
         return
     }
-
-    // Extract username from claims
+    
     followerUsername := customClaims.Username
     followingUsername := c.Param("username")
 
