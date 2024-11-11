@@ -1,14 +1,17 @@
 package notifications
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vaanskii/vansify/db"
 	"github.com/vaanskii/vansify/models"
 	"github.com/vaanskii/vansify/utils"
 )
+
 
 func GetNotifications(c *gin.Context) {
     claims, exists := c.Get("claims")
@@ -29,7 +32,7 @@ func GetNotifications(c *gin.Context) {
         return
     }
 
-    rows, err := db.DB.Query("SELECT id, user_id, type, message, is_read, created_at FROM notifications WHERE user_id = ?", userID)
+    rows, err := db.DB.Query("SELECT id, user_id, type, message, is_read, created_at, follower_id FROM notifications WHERE user_id = ? ORDER BY created_at DESC", userID)
     if err != nil {
         log.Printf("Error fetching notifications: %v\n", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching notifications"})
@@ -37,15 +40,45 @@ func GetNotifications(c *gin.Context) {
     }
     defer rows.Close()
 
-    var notifications []models.Notification
+    var notifications []map[string]interface{}
     for rows.Next() {
         var notification models.Notification
-        if err := rows.Scan(&notification.ID, &notification.UserID, &notification.Type, &notification.Message, &notification.IsRead, &notification.CreatedAt); err != nil {
+        var followerID sql.NullInt64
+        var createdAt time.Time
+        if err := rows.Scan(&notification.ID, &notification.UserID, &notification.Type, &notification.Message, &notification.IsRead, &createdAt, &followerID); err != nil {
             log.Printf("Error scanning notification: %v\n", err)
             c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning notification"})
             return
         }
-        notifications = append(notifications, notification)
+        formattedTime := createdAt.Format("2006-01-02 15:04:05")
+
+        var profilePicture string
+        if followerID.Valid {
+            // Fetch profile picture for the user who followed (follower_id)
+            err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE id = ?", followerID.Int64).Scan(&profilePicture)
+            if err != nil {
+                log.Printf("Error fetching profile picture for user ID %d: %v\n", followerID.Int64, err)
+                profilePicture = ""
+            }
+        } else {
+            profilePicture = ""
+        }
+
+        notifications = append(notifications, map[string]interface{}{
+            "id":              notification.ID,
+            "user_id":         notification.UserID,
+            "type":            notification.Type,
+            "message":         notification.Message,
+            "is_read":         notification.IsRead,
+            "created_at":      formattedTime,
+            "profile_picture": profilePicture,
+        })
+    }
+
+    if err = rows.Err(); err != nil {
+        log.Printf("Error after scanning rows: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error after scanning rows"})
+        return
     }
 
     c.JSON(http.StatusOK, gin.H{"notifications": notifications})

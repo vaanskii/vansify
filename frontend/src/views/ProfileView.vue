@@ -197,9 +197,7 @@ const handleChat = async () => {
       router.push({ path: `/inbox/${chatExistsResponse.data.chat_id}`, query: { user: user.value.username } });
     } else {
       // If chat does not exist, create a new chat
-      const createChatResponse = await axios.post('/v1/create-chat', { user2: user.value.username }, {
-        headers: { Authorization: `Bearer ${store.user.access}` }
-      });
+      const createChatResponse = await axios.post('/v1/create-chat', { user2: user.value.username });
       const chatID = createChatResponse.data.chat_id;
       router.push({ path: `/inbox/${chatID}`, query: { user: user.value.username } });
     }

@@ -1,10 +1,11 @@
 <template>
-  <div>
+  <h1 v-if="loader">Loading</h1>
+  <div v-else>
     <h1>Your Chats</h1>
     <ul v-if="chats.length > 0">
       <li v-for="chat in sortedChats" :key="chat.chat_id">
         <router-link :to="{ name: 'chat', params: { chatID: chat.chat_id }, query: { user: chat.user } }">
-          <img :src="chat.profile_picture" alt="Profile Picture" width="30" height="30" />  <!-- Add this line -->
+          <img :src="chat.profile_picture" alt="Profile Picture" width="30" height="30" />
           {{ chat.user }}
           <span v-if="chat.unread_count > 0">({{ chat.unread_count }})</span>
           <br>
@@ -18,17 +19,19 @@
   </div>
 </template>
 
-
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import axios from 'axios';
 import { userStore } from '@/stores/user';
+import { addData, getData } from '@/utils/notifDB';
 
 const chats = ref([]);
 const error = ref('');
 const apiUrl = import.meta.env.VITE_WS_URL;
 const store = userStore();
 const wsUrl = `ws://${apiUrl}/v1/notifications/ws?token=${encodeURIComponent(store.user.access)}`;
+const wsConnected = ref(false);
+const loader = ref(true);
 let ws;
 
 const fetchChats = async () => {
@@ -42,6 +45,8 @@ const fetchChats = async () => {
         last_message_time: chat.last_message_time,
         profile_picture: chat.profile_picture
       }));
+      addData('chats', { chat_id: 'chatList', chat_list: chats.value });
+      loader.value = false;
     } else {
       chats.value = [];
     }
@@ -55,6 +60,7 @@ const deleteChat = async (chatID) => {
   try {
     await axios.delete(`/v1/chat/${chatID}`);
     chats.value = chats.value.filter(chat => chat.chat_id !== chatID);
+    addData('chats', { chat_id: 'chatList', chat_list: chats.value });
   } catch (err) {
     error.value = err.response ? err.response.data.error : 'An error occurred';
   }
@@ -83,11 +89,13 @@ const updateMessageTimes = () => {
   }));
 };
 
-
 const connectNotificationWebSocket = () => {
   ws = new WebSocket(wsUrl);
   ws.onopen = () => {
-    console.log("Notification WebSocket connection established");
+    if (import.meta.env.MODE === 'development') { 
+      console.log("Notification WebSocket connection established");
+    }
+    wsConnected.value = true;
   };
   ws.onmessage = (event) => {
     try {
@@ -115,6 +123,7 @@ const connectNotificationWebSocket = () => {
           profile_picture: data.profile_picture
         });
       }
+      addData('chats', { chat_id: 'chatList', chat_list: chats.value });
       // Trigger sort
       chats.value = chats.value.slice().sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
     } catch (e) {
@@ -122,19 +131,28 @@ const connectNotificationWebSocket = () => {
     }
   };
   ws.onerror = (error) => {
-    console.error("Notification WebSocket error: ", error);
+    if (import.meta.env.MODE === 'development') { 
+      console.error("Notification WebSocket error: ", error); 
+    }
   };
   ws.onclose = () => {
-    console.log("Notification WebSocket connection closed");
+    if (import.meta.env.MODE === 'development') { 
+      console.log("Notification WebSocket connection closed");
+    }
+    wsConnected.value = false; 
   };
 };
 
-
-
-onMounted(() => {
+onMounted(async () => {
+  const storedChats = await getData('chats', 'chatList');
+  if (storedChats) {
+    chats.value = storedChats.chat_list;
+    loader.value = false;
+  }
+  
   if (store.user.isAuthenticated) {
-    fetchChats();
     connectNotificationWebSocket();
+    fetchChats();
     setInterval(updateMessageTimes, 60000);
   }
 });

@@ -159,7 +159,7 @@ func ChatWsHandler(c *gin.Context) {
         err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", incomingMessage.Username).Scan(&profilePicture)
         if err != nil {
             log.Println("Error querying profile picture:", err)
-            profilePicture = "" // Set to empty or a default value if needed
+            profilePicture = ""
         }
 
         // Save message to database

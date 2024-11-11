@@ -76,9 +76,17 @@ func FollowUser(c *gin.Context) {
         return
     }
 
+    // Get profile picture of the follower
+    var profilePicture string
+    err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE id = ?", followerID).Scan(&profilePicture)
+    if err != nil {
+        log.Printf("Error retrieving follower's profile picture: %v\n", err)
+        profilePicture = ""
+    }
+
     // Create follow notification
     message := followerUsername + " started following you"
-    _, err = db.DB.Exec("INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)", followingID, models.FollowNotificationType, message)
+    _, err = db.DB.Exec("INSERT INTO notifications (user_id, type, message, follower_id) VALUES (?, ?, ?, ?)", followingID, models.FollowNotificationType, message, followerID)
     if err != nil {
         log.Printf("Error creating follow notification: %v\n", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating notification"})

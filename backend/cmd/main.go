@@ -80,9 +80,10 @@ func main() {
 
         // General Notifications
         v1.GET("/notifications", auth.AuthMiddleware(), notifications.GetNotifications)
-        v1.GET("/notifications/count", auth.AuthMiddleware(), notifications.GetUnreadNotificationCount) 
+        v1.GET("/notifications/count", auth.AuthMiddleware(), notifications.GetUnreadNotificationCount)
         v1.POST("/notifications/general/mark-read/:notificationID", auth.AuthMiddleware(), notifications.MarkNotificationAsRead)
         v1.DELETE("/notifications/delete/:notificationID", auth.AuthMiddleware(), notifications.DeleteNotification)
+
     }
 
     r.GET("/", func(c *gin.Context) {

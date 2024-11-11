@@ -22,38 +22,54 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { userStore } from '@/stores/user';
 import axios from 'axios';
+import { addData, getData } from '@/utils/notifDB';
 
 const apiUrl = import.meta.env.VITE_WS_URL;
 const store = userStore();
 const router = useRouter();
 const unreadCount = ref(0);
-const unreadNotificationCount = ref(0); // Unread general notifications count
+const unreadNotificationCount = ref(0);
 const wsUrl = `ws://${apiUrl}/v1/notifications/ws?token=${encodeURIComponent(store.user.access)}`;
 let ws;
+const wsConnected = ref(false);
+const loader = ref(true);
 
 const connectNotificationWebSocket = () => {
   ws = new WebSocket(wsUrl);
   ws.onopen = () => {
-    console.log("Notification WebSocket connection established");
+    if (import.meta.env.MODE === 'development') { 
+      console.log("Notification WebSocket connection established");
+    }
+    wsConnected.value = true;
+    loader.value = false;
+    fetchUnreadCount();
+    fetchUnreadNotificationCount();
   };
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
       if (data.unread_count !== undefined) {
         unreadCount.value = data.unread_count;
+        addData('chats', { chat_id: 'messageCounter', unread_count: data.unread_count });
       }
       if (data.unread_notification_count !== undefined) {
         unreadNotificationCount.value = data.unread_notification_count;
+        addData('notifications', { id: 'notificationCounter', unread_count: data.unread_notification_count });
       }
     } catch (e) {
       console.error("Error processing WebSocket message:", e);
     }
   };
   ws.onerror = (error) => {
-    console.error("Notification WebSocket error: ", error);
+    if (import.meta.env.MODE === 'development') { 
+      console.error("Notification WebSocket error: ", error); 
+    }
   };
   ws.onclose = () => {
-    console.log("Notification WebSocket connection closed");
+    if (import.meta.env.MODE === 'development') { 
+      console.log("Notification WebSocket connection closed");
+    }
+    wsConnected.value = false; 
   };
 };
 
@@ -63,15 +79,42 @@ const logout = () => {
 };
 
 const goToChats = () => {
-  router.push('/inbox');
+  if (wsConnected.value) {
+    router.push('/inbox');
+  } else {
+    const interval = setInterval(() => {
+      if (wsConnected.value) {
+        clearInterval(interval);
+        router.push('/inbox');
+      }
+    }, 100);
+  }
 };
 
 const goToProfile = () => {
-  router.push(`/${store.user.username}`);
+  if (wsConnected.value) {
+    router.push(`/${store.user.username}`);
+  } else {
+    const interval = setInterval(() => {
+      if (wsConnected.value) {
+        clearInterval(interval);
+        router.push(`/${store.user.username}`);
+      }
+    }, 100);
+  }
 };
 
 const notifications = () => {
-  router.push(`/notifications`);
+  if (wsConnected.value) {
+    router.push('/notifications');
+  } else {
+    const interval = setInterval(() => {
+      if (wsConnected.value) {
+        clearInterval(interval);
+        router.push('/notifications');
+      }
+    }, 100);
+  }
 };
 
 const goToLogin = () => {
@@ -82,11 +125,17 @@ const goToRegister = () => {
   router.push('/register');
 };
 
-onMounted(() => {
+onMounted(async () => {
   if (store.user.isAuthenticated) {
-    fetchUnreadCount();
-    fetchUnreadNotificationCount();
     connectNotificationWebSocket();
+    const chatData = await getData('chats', 'messageCounter');
+    if (chatData) {
+      unreadCount.value = chatData.unread_count;
+    }
+    const notificationData = await getData('notifications', 'notificationCounter');
+    if (notificationData) {
+      unreadNotificationCount.value = notificationData.unread_count;
+    }
   }
 });
 
@@ -98,8 +147,11 @@ const fetchUnreadCount = async () => {
   try {
     const response = await axios.get('/v1/notifications/chat/unread');
     unreadCount.value = response.data.unread_count;
+    addData('chats', { chat_id: 'messageCounter', unread_count: response.data.unread_count });
   } catch (error) {
     console.error('Error fetching unread message count:', error);
+  } finally {
+    loader.value = false;
   }
 };
 
@@ -107,8 +159,11 @@ const fetchUnreadNotificationCount = async () => {
   try {
     const response = await axios.get('/v1/notifications/count');
     unreadNotificationCount.value = response.data.unread_count;
+    addData('notifications', { id: 'notificationCounter', unread_count: response.data.unread_count });
   } catch (error) {
     console.error('Error fetching unread notifications count:', error);
+  } finally {
+    loader.value = false;
   }
 };
 </script>
