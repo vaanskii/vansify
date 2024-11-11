@@ -66,7 +66,7 @@ func main() {
 
         // Chat routes
         v1.POST("/create-chat", auth.AuthMiddleware(), chat.CreateChat)
-        v1.GET("/chat/:chatID", auth.AuthMiddleware(), chat.ChatWsHandler)
+        v1.GET("/chat/:chatID/ws", auth.AuthMiddleware(), chat.ChatWsHandler)
         v1.GET("/chat/:chatID/history", auth.AuthMiddleware(), chat.GetChatHistory)
         v1.GET("/check-chat/:user1/:user2", auth.AuthMiddleware(), chat.CheckChatExists)
         v1.GET("/notifications/chat/unread", auth.AuthMiddleware(), notifications.GetUnreadChatNotifications)

@@ -121,7 +121,7 @@ const deleteMessage = async (messageID) => {
 
 // WebSocket connection logic
 const connectWebSocket = (chatID, token) => {
-  const wsURL = `ws://${apiUrl}/v1/chat/${chatID}?token=${encodeURIComponent(token)}`;
+  const wsURL = `ws://${apiUrl}/v1/chat/${chatID}/ws?token=${encodeURIComponent(token)}`;
   ws = new WebSocket(wsURL);
 
   ws.onopen = () => {
