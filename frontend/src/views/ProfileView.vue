@@ -2,7 +2,10 @@
   <div v-if="isAuthenticated">
     <h1 v-if="userFound">User Profile: {{ user.username }}</h1>
     <div v-if="userFound">
-      <img class="image" :src="user.profile_picture" alt="Profile Picture" />
+      <div class="image-container">
+        <img v-if="imageIsLoaded" class="image" :src="user.profile_picture" alt="Profile Picture"/>
+        <div v-else class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>
+      </div>
       <p><strong>Gender:</strong> {{ user.gender }}</p>
       <p>
         <strong>Followers:</strong> 
@@ -61,6 +64,7 @@ const router = useRouter();
 const store = userStore();
 const isAuthenticated = ref(store.user.isAuthenticated);
 const userFound = ref(true);
+const imageIsLoaded = ref(false);
 const user = ref({
   id: '',
   username: '',
@@ -138,6 +142,7 @@ onMounted(async () => {
     const response = await axios.get(`/v1/user/${username}`);
     user.value = response.data;
     user.value.profile_picture = `/${user.value.profile_picture}`;
+    imageIsLoaded.value = true;
     // Check follow status
     const followStatusResponse = await axios.get(`/v1/is-following/${loggedInUsername}/${username}`);
     isFollowing.value = followStatusResponse.data.is_following;
@@ -209,9 +214,19 @@ const handleChat = async () => {
 
 
 <style scoped>
-  .image {
+  .image-container {
     width: 150px;
     height: 150px;
+    border-radius: 50%;
+    border: 1px solid black;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .image {
+    width: 149px;
+    height: 149px;
+    border-radius: 50%;
   }
   .small-image {
     width: 50px;
@@ -219,4 +234,66 @@ const handleChat = async () => {
     border-radius: 50%;
     margin-right: 10px;
   }
+
+
+.lds-ellipsis,
+.lds-ellipsis div {
+  box-sizing: border-box;
+}
+.lds-ellipsis {
+  display: inline-block;
+  position: relative;
+  width: 80px;
+  height: 80px;
+}
+.lds-ellipsis div {
+  position: absolute;
+  top: 33.33333px;
+  width: 13.33333px;
+  height: 13.33333px;
+  border-radius: 50%;
+  background: currentColor;
+  animation-timing-function: cubic-bezier(0, 1, 1, 0);
+}
+.lds-ellipsis div:nth-child(1) {
+  left: 8px;
+  animation: lds-ellipsis1 0.6s infinite;
+}
+.lds-ellipsis div:nth-child(2) {
+  left: 8px;
+  animation: lds-ellipsis2 0.6s infinite;
+}
+.lds-ellipsis div:nth-child(3) {
+  left: 32px;
+  animation: lds-ellipsis2 0.6s infinite;
+}
+.lds-ellipsis div:nth-child(4) {
+  left: 56px;
+  animation: lds-ellipsis3 0.6s infinite;
+}
+@keyframes lds-ellipsis1 {
+  0% {
+    transform: scale(0);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes lds-ellipsis3 {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(0);
+  }
+}
+@keyframes lds-ellipsis2 {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(24px, 0);
+  }
+}
+
 </style>
