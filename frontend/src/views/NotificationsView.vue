@@ -2,7 +2,7 @@
   <h1 v-if="loader">Loading...</h1>
   <div v-else>
     <h1>Notifications</h1>
-    <ul>
+    <ul v-if="notifications.length > 0">
       <li v-for="notification in notifications" :key="notification.id">
         <img :src="notification.profile_picture" alt="Profile Picture" width="30" height="30" />
         <span 
@@ -15,6 +15,7 @@
         <button @click="deleteNotification(notification.id)">Delete</button>
       </li>
     </ul>
+    <p v-else>No noticiations</p>
   </div>
 </template>
 
@@ -33,7 +34,7 @@ const loader = ref(true);
 const fetchNotifications = async () => {
   try {
     const response = await axios.get('/v1/notifications');
-    notifications.value = response.data.notifications;
+    notifications.value = response.data.notifications || [];
     notifications.value.forEach(notification => {
       console.log(notification.created_at)
     })
