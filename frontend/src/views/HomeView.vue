@@ -23,54 +23,41 @@ import { useRouter } from 'vue-router';
 import { userStore } from '@/stores/user';
 import axios from 'axios';
 import { addData, getData } from '@/utils/notifDB';
+import emitter from '@/eventBus';
 
-const apiUrl = import.meta.env.VITE_WS_URL;
 const store = userStore();
 const router = useRouter();
 const unreadCount = ref(0);
 const unreadNotificationCount = ref(0);
-const wsUrl = `ws://${apiUrl}/v1/notifications/ws?token=${encodeURIComponent(store.user.access)}`;
-let ws;
 const wsConnected = ref(false);
 const loader = ref(true);
 
-const connectNotificationWebSocket = () => {
-  ws = new WebSocket(wsUrl);
-  ws.onopen = () => {
-    if (import.meta.env.MODE === 'development') { 
-      console.log("Notification WebSocket connection established");
-    }
-    wsConnected.value = true;
-    loader.value = false;
-    fetchUnreadCount();
-    fetchUnreadNotificationCount();
-  };
-  ws.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      if (data.unread_count !== undefined) {
-        unreadCount.value = data.unread_count;
-        addData('chats', { chat_id: 'messageCounter', unread_count: data.unread_count });
-      }
-      if (data.unread_notification_count !== undefined) {
-        unreadNotificationCount.value = data.unread_notification_count;
-        addData('notifications', { id: 'notificationCounter', unread_count: data.unread_notification_count });
-      }
-    } catch (e) {
-      console.error("Error processing WebSocket message:", e);
-    }
-  };
-  ws.onerror = (error) => {
-    if (import.meta.env.MODE === 'development') { 
-      console.error("Notification WebSocket error: ", error); 
-    }
-  };
-  ws.onclose = () => {
-    if (import.meta.env.MODE === 'development') { 
-      console.log("Notification WebSocket connection closed");
-    }
-    wsConnected.value = false; 
-  };
+const handleWebSocketOpen = () => {
+  console.log("WebSocket connection opened for general notifications");
+  wsConnected.value = true;
+  loader.value = false;
+  fetchUnreadCount();
+  fetchUnreadNotificationCount();
+};
+
+const handleWebSocketMessage = (data) => {
+  if (data.unread_count !== undefined) {
+    unreadCount.value = data.unread_count;
+    addData('chats', { chat_id: 'messageCounter', unread_count: data.unread_count });
+  }
+  if (data.unread_notification_count !== undefined) {
+    unreadNotificationCount.value = data.unread_notification_count;
+    addData('notifications', { id: 'notificationCounter', unread_count: data.unread_notification_count });
+  }
+};
+
+const handleWebSocketError = (error) => {
+  console.error("Notification WebSocket error: ", error);
+};
+
+const handleWebSocketClose = () => {
+  console.log("WebSocket connection closed for general notifications.");
+  wsConnected.value = false;
 };
 
 const logout = () => {
@@ -79,42 +66,15 @@ const logout = () => {
 };
 
 const goToChats = () => {
-  if (wsConnected.value) {
-    router.push('/inbox');
-  } else {
-    const interval = setInterval(() => {
-      if (wsConnected.value) {
-        clearInterval(interval);
-        router.push('/inbox');
-      }
-    }, 100);
-  }
+  router.push('/inbox');
 };
 
 const goToProfile = () => {
-  if (wsConnected.value) {
-    router.push(`/${store.user.username}`);
-  } else {
-    const interval = setInterval(() => {
-      if (wsConnected.value) {
-        clearInterval(interval);
-        router.push(`/${store.user.username}`);
-      }
-    }, 100);
-  }
+  router.push(`/${store.user.username}`);
 };
 
 const notifications = () => {
-  if (wsConnected.value) {
-    router.push('/notifications');
-  } else {
-    const interval = setInterval(() => {
-      if (wsConnected.value) {
-        clearInterval(interval);
-        router.push('/notifications');
-      }
-    }, 100);
-  }
+  router.push('/notifications');
 };
 
 const goToLogin = () => {
@@ -127,7 +87,11 @@ const goToRegister = () => {
 
 onMounted(async () => {
   if (store.user.isAuthenticated) {
-    connectNotificationWebSocket();
+    emitter.on('ws-open', handleWebSocketOpen);
+    emitter.on('ws-message', handleWebSocketMessage);
+    emitter.on('ws-error', handleWebSocketError);
+    emitter.on('ws-close', handleWebSocketClose);
+
     const chatData = await getData('chats', 'messageCounter');
     if (chatData) {
       unreadCount.value = chatData.unread_count;
@@ -140,7 +104,10 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  if (ws) ws.close();
+  emitter.off('ws-open', handleWebSocketOpen);
+  emitter.off('ws-message', handleWebSocketMessage);
+  emitter.off('ws-error', handleWebSocketError);
+  emitter.off('ws-close', handleWebSocketClose);
 });
 
 const fetchUnreadCount = async () => {

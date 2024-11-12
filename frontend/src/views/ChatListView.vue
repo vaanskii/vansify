@@ -24,15 +24,13 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import axios from 'axios';
 import { userStore } from '@/stores/user';
 import { addData, getData } from '@/utils/notifDB';
+import emitter from '@/eventBus';
 
 const chats = ref([]);
 const error = ref('');
-const apiUrl = import.meta.env.VITE_WS_URL;
 const store = userStore();
-const wsUrl = `ws://${apiUrl}/v1/notifications/ws?token=${encodeURIComponent(store.user.access)}`;
 const wsConnected = ref(false);
 const loader = ref(true);
-let ws;
 
 const fetchChats = async () => {
   try {
@@ -89,59 +87,49 @@ const updateMessageTimes = () => {
   }));
 };
 
-const connectNotificationWebSocket = () => {
-  ws = new WebSocket(wsUrl);
-  ws.onopen = () => {
-    if (import.meta.env.MODE === 'development') { 
-      console.log("Notification WebSocket connection established");
+const handleWebsocketOpen = () => {
+  console.log("WebSocket connection opened in ChatListView");
+  wsConnected.value = true;
+  loader.value = false;
+}
+
+const handleWebSocketMessage = (data) => {
+  try {
+    const chatIndex = chats.value.findIndex(chat => chat.chat_id === data.chat_id);
+  if (chatIndex !== -1) {
+    chats.value[chatIndex] = {
+      ...chats.value[chatIndex],
+      unread_count: data.unread_count,
+      last_message_time: data.last_message_time || new Date().toISOString(),
+      message: data.message,
+      user: data.user,
+      profile_picture: data.profile_picture
     }
-    wsConnected.value = true;
-  };
-  ws.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      // Check if the chat already exists in the list
-      const chatIndex = chats.value.findIndex(chat => chat.chat_id === data.chat_id);
-      if (chatIndex !== -1) {
-        // Update existing chat
-        chats.value[chatIndex] = {
-          ...chats.value[chatIndex],
-          unread_count: data.unread_count,
-          last_message_time: data.last_message_time || new Date().toISOString(),
-          message: data.message,
-          user: data.user,
-          profile_picture: data.profile_picture  
-        };
-      } else {
-        // Add new chat
-        chats.value.push({
-          chat_id: data.chat_id,
-          user: data.user,
-          unread_count: data.unread_count,
-          last_message_time: data.last_message_time || new Date().toISOString(),
-          message: data.message,
-          profile_picture: data.profile_picture
-        });
-      }
-      addData('chats', { chat_id: 'chatList', chat_list: chats.value });
-      // Trigger sort
-      chats.value = chats.value.slice().sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
-    } catch (e) {
-      console.error("Error processing WebSocket message:", e);
-    }
-  };
-  ws.onerror = (error) => {
-    if (import.meta.env.MODE === 'development') { 
-      console.error("Notification WebSocket error: ", error); 
-    }
-  };
-  ws.onclose = () => {
-    if (import.meta.env.MODE === 'development') { 
-      console.log("Notification WebSocket connection closed");
-    }
-    wsConnected.value = false; 
-  };
-};
+  } else {
+    chats.value.push({
+      chat_id: data.chat_id,
+      user: data.user,
+      unread_count: data.unread_count,
+      last_message_time: data.last_message_time || new Date().toISOString(),
+      message: data.message,
+      profile_picture: data.profile_picture
+    });
+  }
+  addData('chats', { chat_id: 'chatList', chat_list: chats.value });
+  chats.value = chats.value.slice().sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
+  } catch (e) {
+    console.error("Error processing WebSocket message:", e);
+  }
+}
+
+const handleWebSocketError = (error) => {
+  console.error("Notification WebSocket error: ", error);
+}
+
+const handleWebSocketClose = () => {
+  console.log("WebSocket connection closed");
+  wsConnected.value = false;
+}
 
 onMounted(async () => {
   const storedChats = await getData('chats', 'chatList');
@@ -151,13 +139,19 @@ onMounted(async () => {
   }
   
   if (store.user.isAuthenticated) {
-    connectNotificationWebSocket();
+    emitter.on('ws-open', handleWebsocketOpen);
+    emitter.on('ws-message', handleWebSocketMessage);
+    emitter.on('ws-error', handleWebSocketError);
+    emitter.on('ws-close', handleWebSocketClose);
     fetchChats();
     setInterval(updateMessageTimes, 60000);
   }
 });
 
 onUnmounted(() => {
-  if (ws) ws.close();
+  emitter.off('ws-open', handleWebsocketOpen);
+  emitter.off('ws-message', handleWebSocketMessage);
+  emitter.off('ws-error', handleWebSocketError);
+  emitter.off('ws-close', handleWebSocketClose);
 });
 </script>
