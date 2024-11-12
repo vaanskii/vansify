@@ -1,20 +1,25 @@
 <template>
-  <div>
+  <nav class="navbar">
     <div v-if="store.user.isAuthenticated">
-      <router-link v-if="store.user.isAuthenticated" to="/inbox">My Chats
-        <span v-if="unreadCount > 0">({{ unreadCount }})</span>
-      </router-link> | 
-      <router-link v-if="store.user.isAuthenticated" to="/notifications"> Notifications 
-        <span v-if="unreadNotificationCount > 0">({{ unreadNotificationCount }})</span>
-      </router-link> |
-      <router-link v-if="store.user.isAuthenticated" :to="`/${store.user.username}`">My Profile</router-link> |
-      <button v-if="store.user.isAuthenticated" @click="logout">Logout</button>
+      <router-link class="nav-link" to="/">Home</router-link>
+      <router-link v-if="store.user.isAuthenticated" to="/inbox" class="nav-link">
+        My Chats
+        <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+      </router-link>
+      <router-link v-if="store.user.isAuthenticated" to="/notifications" class="nav-link">
+        Notifications
+        <span v-if="unreadNotificationCount > 0" class="badge">{{ unreadNotificationCount }}</span>
+      </router-link>
+      <router-link v-if="store.user.isAuthenticated" :to="`/${store.user.username}`" class="nav-link">
+        My Profile
+      </router-link>
+      <button v-if="store.user.isAuthenticated" @click="logout" class="nav-button">Logout</button>
     </div>
     <div v-else>
-      <router-link to="/login">Login</router-link>
-      <router-link to="/register">Register</router-link>
+      <router-link to="/login" class="nav-link">Login</router-link>
+      <router-link to="/register" class="nav-link">Register</router-link>
     </div>
-  </div>
+  </nav>
 </template>
 
 <script setup>
@@ -146,3 +151,47 @@ onUnmounted(() => {
   emitter.on('chat-read', fetchChatUnreadCount);
 });
 </script>
+
+
+
+<style scoped>
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #333;
+  padding: 10px;
+}
+
+.nav-link {
+  color: white;
+  text-decoration: none;
+  margin: 0 10px;
+}
+
+.nav-link:hover {
+  text-decoration: underline;
+}
+
+.nav-button {
+  background-color: #ff4d4d;
+  border: none;
+  color: white;
+  padding: 10px 20px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.nav-button:hover {
+  background-color: #ff1a1a;
+}
+
+.badge {
+  background-color: #ff4d4d;
+  border-radius: 12px;
+  padding: 2px 8px;
+  color: white;
+  font-size: 0.8em;
+  margin-left: 5px;
+}
+</style>
