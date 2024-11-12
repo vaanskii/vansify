@@ -111,6 +111,7 @@ onMounted(async () => {
   emitter.on('ws-close', handleWebSocketClose);
   emitter.on('notification-updated', fetchUnreadNotificationCount);
   emitter.on('chat-updated', fetchChatUnreadCount);
+  emitter.on('chat-read', fetchChatUnreadCount);
   
   if (store.user.isAuthenticated) {
     const chatData = await getData('chats', 'messageCounter');
@@ -142,5 +143,6 @@ onUnmounted(() => {
   emitter.off('ws-close', handleWebSocketClose);
   emitter.off('notification-updated', fetchUnreadNotificationCount);
   emitter.off('chat-updated', fetchChatUnreadCount);
+  emitter.on('chat-read', fetchChatUnreadCount);
 });
 </script>

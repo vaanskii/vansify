@@ -133,57 +133,57 @@ const connectWebSocket = (chatID, token) => {
 
   // Resend unsent messages
   const unsentMessages = messages.value.filter(msg => msg.status === false && msg.isOwnMessage);
-  unsentMessages.forEach(message => {
-    ws.send(JSON.stringify({ message: message.message, username }));
-    message.status = true;
-    console.log('Resent message:', message);
-  });
-  removeOfflineMessages();
-};
+    unsentMessages.forEach(message => {
+      ws.send(JSON.stringify({ message: message.message, username }));
+      message.status = true;
+      console.log('Resent message:', message);
+    });
+    removeOfflineMessages();
+  };
 
-ws.onerror = (error) => {
-  console.error('WebSocket error:', error);
-  isConnected.value = false;
-};
+  ws.onerror = (error) => {
+    console.error('WebSocket error:', error);
+    isConnected.value = false;
+  };
 
-ws.onclose = () => {
-  console.log('WebSocket connection closed');
-  isConnected.value = false;
-  if (retryAttempt < maxRetries) {
-    setTimeout(() => {
-      retryAttempt++;
-      console.log(`Reconnecting... Attempt ${retryAttempt}`);
-      connectWebSocket(chatID, token);
-    }, Math.min(1000 * Math.pow(2, retryAttempt), 30000));
-  } else {
-    console.error('Max reconnection attempts reached.');
-  }
-};
-ws.onmessage = (event) => {
-  const message = JSON.parse(event.data);
-  if (message.type === 'MESSAGE_DELETED') {
-    const index = messages.value.findIndex(msg => msg.id == message.message_id);
-    if (index !== -1) {
-      messages.value.splice(index, 1);
-    } 
-  } else {
-    // Check if the message is for the current chat
-    if (message.chat_id === route.params.chatID) {
-      if (message.id && message.username !== username) {
-        if (!messages.value.some(msg => msg.id == message.id)) {
-          messages.value.push({
-            ...message,
-            isOwnMessage: message.username === username,
-            profile_picture: `/${message.profile_picture}`
-          });
+  ws.onclose = () => {
+    console.log('WebSocket connection closed');
+    isConnected.value = false;
+    if (retryAttempt < maxRetries) {
+      setTimeout(() => {
+        retryAttempt++;
+        console.log(`Reconnecting... Attempt ${retryAttempt}`);
+        connectWebSocket(chatID, token);
+      }, Math.min(1000 * Math.pow(2, retryAttempt), 30000));
+    } else {
+      console.error('Max reconnection attempts reached.');
+    }
+  };
+  ws.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    if (message.type === 'MESSAGE_DELETED') {
+      const index = messages.value.findIndex(msg => msg.id == message.message_id);
+      if (index !== -1) {
+        messages.value.splice(index, 1);
+      } 
+    } else {
+      // Check if the message is for the current chat
+      if (message.chat_id === route.params.chatID) {
+        if (message.id && message.username !== username) {
+          if (!messages.value.some(msg => msg.id == message.id)) {
+            messages.value.push({
+              ...message,
+              isOwnMessage: message.username === username,
+              profile_picture: `/${message.profile_picture}`
+            });
+          }
         }
       }
     }
-  }
-  if (route.params.chatID === chatID) {
-    markChatNotificationsAsRead(chatID);
-  }
-};
+    if (route.params.chatID === chatID) {
+      markChatNotificationsAsRead(chatID);
+    }
+  };
 };
 
 // Fetch chat history
@@ -220,6 +220,7 @@ const fetchChatHistory = async (chatID) => {
 const markChatNotificationsAsRead = async (chatID) => {
   try {
     await axios.post(`/v1/notifications/chat/mark-read/${chatID}`);
+    emitter.emit('chat-read', chatID);
   } catch (error) {
     console.error('Error marking notifications as read:', error);
   }
