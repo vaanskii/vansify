@@ -13,7 +13,9 @@ const openDB = () => {
     };
 
     request.onsuccess = (event) => {
-      console.log("Database opened successfully");
+      if (import.meta.env.MODE === "development"){
+        console.log("Database opened successfully");
+      }
       db = event.target.result;
       resolve(db);
     };
@@ -30,7 +32,9 @@ const openDB = () => {
         notificationStore.createIndex("notificationList", "notificationList", { unique: false });
         notificationStore.createIndex("notificationCounter", "notificationCounter", { unique: false });
       }
-      console.log("Database setup complete");
+      if (import.meta.env.MODE === "development"){
+        console.log("Database setup complete");
+      }
     };
   });
 };
@@ -53,11 +57,15 @@ const addData = async (storeName, data) => {
   const request = store.put(serializedData);
 
   request.onsuccess = () => {
-    console.log(`${storeName} data added to store`);
+    if (import.meta.env.MODE === "development"){
+      console.log(`${storeName} data added to store`);
+    }
   };
 
   request.onerror = (event) => {
-    console.error(`Error adding ${storeName} data to store:`, event.target.errorCode);
+    if (import.meta.env.MODE === "development"){
+      console.error(`Error adding ${storeName} data to store:`, event.target.errorCode);
+    }
   };
 };
 

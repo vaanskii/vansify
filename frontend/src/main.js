@@ -20,7 +20,11 @@ store.initStore();
 
 // Initialize the IndexedDB database
 openDB().then(() => {
-  console.log('IndexedDB initialized');
+  if (import.meta.env.MODE === 'development') {
+    console.log('IndexedDB initialized');
+  }
 }).catch(error => {
-  console.error('Failed to initialize IndexedDB', error);
+  if (import.meta.env.MODE === 'development') {
+    console.error('Failed to initialize IndexedDB', error);
+  }
 });
