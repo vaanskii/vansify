@@ -162,21 +162,21 @@ ws.onclose = () => {
 ws.onmessage = (event) => {
   const message = JSON.parse(event.data);
   if (message.type === 'MESSAGE_DELETED') {
-    // Ensure message is removed from the array
     const index = messages.value.findIndex(msg => msg.id == message.message_id);
     if (index !== -1) {
       messages.value.splice(index, 1);
-    } else {
-      console.error('Message ID not found in the array');
-    }
+    } 
   } else {
-    if (message.id && message.username !== username) {
-      if (!messages.value.some(msg => msg.id == message.id)) { 
-        messages.value.push({
-          ...message,
-          isOwnMessage: message.username === username,
-          profile_picture: `/${message.profile_picture}`
-        });
+    // Check if the message is for the current chat
+    if (message.chat_id === route.params.chatID) {
+      if (message.id && message.username !== username) {
+        if (!messages.value.some(msg => msg.id == message.id)) {
+          messages.value.push({
+            ...message,
+            isOwnMessage: message.username === username,
+            profile_picture: `/${message.profile_picture}`
+          });
+        }
       }
     }
   }
