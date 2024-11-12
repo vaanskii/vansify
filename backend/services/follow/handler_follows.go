@@ -97,8 +97,9 @@ func FollowUser(c *gin.Context) {
         return
     }
 
-    notificationMessage := map[string]int{
+    notificationMessage := map[string]interface{}{
         "unread_notification_count": notificationCount,
+        "sender": followerUsername,
     }
 
     notificationJSON, err := json.Marshal(notificationMessage)
@@ -132,9 +133,8 @@ func UnfollowUser(c *gin.Context) {
 		return
 	}
 
-
-	followerUsername := customClaims.Username // The username of the logged-in user
-	followingUsername := c.Param("username") // The username of the user to unfollow
+	followerUsername := customClaims.Username
+	followingUsername := c.Param("username")
 
 	// Get follower ID from follower username
 	var followerID int64

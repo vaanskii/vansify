@@ -35,6 +35,7 @@ func NotifyNewMessage(userID int64, message models.Message) {
         "unread_count":     chatUnreadCount,
         "message":          message.Message,
         "user":             message.Username,
+        "sender":           message.Username,
         "last_message_time": time.Now().Format(time.RFC3339),
     })
     GlobalNotificationHub.BroadcastNotification(notificationMessage)
@@ -53,6 +54,7 @@ func GetUnreadChatMessagesCount(userID int64, chatID string) (int, error) {
     err := db.DB.QueryRow("SELECT COUNT(*) FROM chat_notifications WHERE user_id = ? AND chat_id = ? AND is_read = false", userID, chatID).Scan(&count)
     return count, err
 }
+
 func GetUnreadChatNotifications(c *gin.Context) {
     claims, exists := c.Get("claims")
     if !exists {

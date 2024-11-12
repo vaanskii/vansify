@@ -15,7 +15,7 @@
         <button @click="deleteNotification(notification.id)">Delete</button>
       </li>
     </ul>
-    <p v-else>No noticiations</p>
+    <p v-else>No notifications</p>
   </div>
 </template>
 
@@ -25,6 +25,7 @@ import axios from 'axios';
 import { userStore } from '@/stores/user';
 import { useRouter } from 'vue-router';
 import { addData, getData } from '@/utils/notifDB';
+import emitter from '@/eventBus';
 
 const store = userStore();
 const notifications = ref([]);
@@ -35,9 +36,6 @@ const fetchNotifications = async () => {
   try {
     const response = await axios.get('/v1/notifications');
     notifications.value = response.data.notifications || [];
-    notifications.value.forEach(notification => {
-      console.log(notification.created_at)
-    })
     addData('notifications', { id: 'notificationList', notification_list: notifications.value });
     loader.value = false;
   } catch (error) {
@@ -56,6 +54,10 @@ const markAsReadAndRedirect = async (notificationId, message) => {
   try {
     await axios.post(`/v1/notifications/general/mark-read/${notificationId}`, null)
     const username = message.split(' ')[0];
+    notifications.value = notifications.value.map(notification => 
+      notification.id === notificationId ? { ...notification, is_read: true } : notification
+    );
+    emitter.emit('notification-updated');
     router.push(`/${username}`);
   } catch (error) {
     console.error('Error marking notification as read:', error);
@@ -67,6 +69,7 @@ const deleteNotification = async (notificationId) => {
     await axios.delete(`/v1/notifications/delete/${notificationId}`);
     notifications.value = notifications.value.filter(notification => notification.id !== notificationId);
     addData('notifications', { id: 'notificationList', notification_list: notifications.value });
+    emitter.emit('notification-updated');
   } catch (error) {
     console.error('Error deleting notification:', error);
   }

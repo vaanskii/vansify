@@ -34,6 +34,7 @@ import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
 import axios from 'axios';
 import { useRoute, useRouter } from 'vue-router';
 import { userStore } from '@/stores/user';
+import emitter from '@/eventBus';
 
 const apiUrl = import.meta.env.VITE_WS_URL;
 const messages = ref([]);

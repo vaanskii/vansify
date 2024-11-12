@@ -4,7 +4,10 @@
     <h1>Your Chats</h1>
     <ul v-if="chats.length > 0">
       <li v-for="chat in sortedChats" :key="chat.chat_id">
-        <router-link :to="{ name: 'chat', params: { chatID: chat.chat_id }, query: { user: chat.user } }">
+        <router-link 
+          :to="{ name: 'chat', params: { chatID: chat.chat_id }, query: { user: chat.user } }" 
+          @click.native="markChatAsRead(chat.chat_id)"
+        >
           <img :src="chat.profile_picture" alt="Profile Picture" width="30" height="30" />
           {{ chat.user }}
           <span v-if="chat.unread_count > 0">({{ chat.unread_count }})</span>
@@ -117,10 +120,24 @@ const handleWebSocketMessage = (data) => {
   }
   addData('chats', { chat_id: 'chatList', chat_list: chats.value });
   chats.value = chats.value.slice().sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
+
   } catch (e) {
     console.error("Error processing WebSocket message:", e);
   }
 }
+
+const markChatAsRead = async (chatID) => {
+  try {
+    await axios.post(`/v1/notifications/chat/mark-read/${chatID}`);
+    chats.value = chats.value.map(chat =>
+      chat.chat_id === chatID ? { ...chat, unread_count: 0 } : chat
+    );
+    emitter.emit('chat-updated');
+    
+  } catch (error) {
+    console.error('Error marking chat as read:', error);
+  }
+};
 
 const handleWebSocketError = (error) => {
   console.error("Notification WebSocket error: ", error);

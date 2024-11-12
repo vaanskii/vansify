@@ -214,17 +214,23 @@ func ChatWsHandler(c *gin.Context) {
             if err != nil {
                 log.Printf("Error getting unread message count for chat: %v", err)
             } else {
-                // Broadcast the chat-specific unread count notification
-                chatNotificationMessage, _ := json.Marshal(map[string]interface{}{
-                    "user_id":           recipientID,
-                    "chat_id":           chatID,
-                    "unread_count":      chatUnreadCount,
-                    "message":           incomingMessage.Message,
-                    "user":              claims.Username,
-                    "profile_picture":   profilePicture,
-                    "last_message_time": time.Now().Format(time.RFC3339),
-                })
-                notifications.GlobalNotificationHub.BroadcastNotification(chatNotificationMessage)
+                totalUnreadCount, err := notifications.GetTotalUnreadMessageCount(int64(recipientID))
+                if err != nil { log.Printf("Error getting total unread message count: %v", err) 
+            } else {
+                    // Broadcast the chat-specific unread count notification
+                    chatNotificationMessage, _ := json.Marshal(map[string]interface{}{
+                        "user_id":           recipientID,
+                        "chat_id":           chatID,
+                        "unread_count":      chatUnreadCount,
+                        "total_unread_count": totalUnreadCount,
+                        "message":           incomingMessage.Message,
+                        "user":              claims.Username,
+                        "profile_picture":   profilePicture,
+                        "sender":            claims.Username,
+                        "last_message_time": time.Now().Format(time.RFC3339),
+                    })
+                    notifications.GlobalNotificationHub.BroadcastNotification(chatNotificationMessage)
+                }
             }
         }
     }
