@@ -45,7 +45,7 @@ visible.value = false;
 
 @keyframes slide-down {
     0% {
-        transform: translateY(-100%);
+        transform: translateY(-200%);
         opacity: 0;
     }
     10% {
@@ -57,7 +57,7 @@ visible.value = false;
         opacity: 1;
     }
     100% {
-        transform: translateY(-100%);
+        transform: translateY(-200%);
         opacity: 0;
     }
 }
@@ -66,9 +66,10 @@ visible.value = false;
     display: flex;
     justify-content: center;
     align-items: center;
+    position: absolute;
     padding: 15px;
     width: 200px;
-    margin-bottom: 10px;
+    top: 80px;
     border-radius: 5px;
     color: white;
     font-weight: bold;

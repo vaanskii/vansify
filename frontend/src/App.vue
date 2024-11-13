@@ -45,7 +45,7 @@ const connectWebSocket = () => {
         console.log('WebSocket connection established in app.vue');
       }
       if (!initialConnection) {
-        notify('Connected...', 'success', 3000);
+        notify('Connected.', 'success', 3000);
       }
       initialConnection = false;
       emitter.emit('ws-open');
@@ -62,7 +62,7 @@ const connectWebSocket = () => {
       }
       emitter.emit('ws-error', error);
       if (!reconnecting && store.user.isAuthenticated) {
-        notify('WebSocket error occurred. Please try again later.', 'error', 3000);
+        notify('Something went wrong, Please try again later...', 'error', 3000);
         reconnecting = true;
       }
     };
