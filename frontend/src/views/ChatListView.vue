@@ -1,8 +1,8 @@
 <template>
-  <h1 v-if="loader">Loading</h1>
+  <h1 v-if="chatStore.loader">Loading</h1>
   <div v-else>
     <h1>Your Chats</h1>
-    <ul v-if="chats.length > 0">
+    <ul v-if="chatStore.chats.length > 0">
       <li v-for="chat in sortedChats" :key="chat.chat_id">
         <router-link 
           :to="{ name: 'chat', params: { chatID: chat.chat_id }, query: { user: chat.user } }" 
@@ -18,157 +18,51 @@
       </li>
     </ul>
     <div v-else>No chats found</div>
-    <div v-if="error" class="error">{{ error }}</div>
+    <div v-if="chatStore.error" class="error">{{ chatStore.error }}</div>
   </div>
 </template>
 
+
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue';
-import axios from 'axios';
+import { onMounted, onUnmounted, computed } from 'vue';
+import { useChatStore } from '@/stores/chatStore';
 import { userStore } from '@/stores/user';
-import { addData, getData } from '@/utils/notifDB';
 import emitter from '@/eventBus';
 
-const chats = ref([]);
-const error = ref('');
 const store = userStore();
-const wsConnected = ref(false);
-const loader = ref(true);
+const chatStore = useChatStore();
 
-const fetchChats = async () => {
-  try {
-    const response = await axios.get('/v1/me/chats');
-    if (response.data && response.data.chats) {
-      chats.value = response.data.chats.map(chat => ({
-        chat_id: chat.chat_id,
-        user: chat.user,
-        unread_count: chat.unread_count,
-        last_message_time: chat.last_message_time,
-        profile_picture: chat.profile_picture
-      }));
-      addData('chats', { chat_id: 'chatList', chat_list: chats.value });
-      loader.value = false;
-    } else {
-      chats.value = [];
-    }
-  } catch (err) {
-    error.value = err.response ? err.response.data.error : 'An error occurred';
-    console.error("Error fetching chats:", err);
-  }
-};
+const sortedChats = computed(() => chatStore.sortedChats);
 
-const deleteChat = async (chatID) => {
-  try {
-    await axios.delete(`/v1/chat/${chatID}`);
-    chats.value = chats.value.filter(chat => chat.chat_id !== chatID);
-    addData('chats', { chat_id: 'chatList', chat_list: chats.value });
-  } catch (err) {
-    error.value = err.response ? err.response.data.error : 'An error occurred';
-  }
-};
-
-// Sort chats by the last received message time
-const sortedChats = computed(() => {
-  return chats.value.slice().sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
-});
-
-const formatTime = (timestamp) => {
-  const timeDiff = Math.floor((Date.now() - new Date(timestamp)) / 1000);
-  if (timeDiff < 60) return 'Just now';
-  const minutes = Math.floor(timeDiff / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
-  const days = Math.floor(hours / 24);
-  return `${days} ${days === 1 ? 'day' : 'days'} ago`;
-};
-
-const updateMessageTimes = () => {
-  chats.value = chats.value.map(chat => ({
-    ...chat,
-    time: formatTime(chat.last_message_time) 
-  }));
-};
-
-const handleWebsocketOpen = () => {
-  console.log("WebSocket connection opened in ChatListView");
-  wsConnected.value = true;
-  loader.value = false;
-}
-
-const handleWebSocketMessage = (data) => {
-  try {
-    const chatIndex = chats.value.findIndex(chat => chat.chat_id === data.chat_id);
-  if (chatIndex !== -1) {
-    chats.value[chatIndex] = {
-      ...chats.value[chatIndex],
-      unread_count: data.unread_count,
-      last_message_time: data.last_message_time || new Date().toISOString(),
-      message: data.message,
-      user: data.user,
-      profile_picture: data.profile_picture
-    }
-  } else {
-    chats.value.push({
-      chat_id: data.chat_id,
-      user: data.user,
-      unread_count: data.unread_count,
-      last_message_time: data.last_message_time || new Date().toISOString(),
-      message: data.message,
-      profile_picture: data.profile_picture
-    });
-  }
-  addData('chats', { chat_id: 'chatList', chat_list: chats.value });
-  chats.value = chats.value.slice().sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
-
-  } catch (e) {
-    console.error("Error processing WebSocket message:", e);
-  }
-}
-
-const markChatAsRead = async (chatID) => {
-  try {
-    await axios.post(`/v1/notifications/chat/mark-read/${chatID}`);
-    chats.value = chats.value.map(chat =>
-      chat.chat_id === chatID ? { ...chat, unread_count: 0 } : chat
-    );
-    emitter.emit('chat-updated');
-    
-  } catch (error) {
-    console.error('Error marking chat as read:', error);
-  }
-};
-
-const handleWebSocketError = (error) => {
-  console.error("Notification WebSocket error: ", error);
-}
-
-const handleWebSocketClose = () => {
-  console.log("WebSocket connection closed");
-  wsConnected.value = false;
-}
-
-onMounted(async () => {
-  const storedChats = await getData('chats', 'chatList');
-  if (storedChats) {
-    chats.value = storedChats.chat_list;
-    loader.value = false;
-  }
-  
+onMounted(() => {
   if (store.user.isAuthenticated) {
-    emitter.on('ws-open', handleWebsocketOpen);
-    emitter.on('ws-message', handleWebSocketMessage);
-    emitter.on('ws-error', handleWebSocketError);
-    emitter.on('ws-close', handleWebSocketClose);
-    fetchChats();
-    setInterval(updateMessageTimes, 60000);
+    if (chatStore.chats.length === 0) {
+      chatStore.fetchChats();
+    }
+    emitter.on('ws-open', chatStore.handleWebSocketOpen);
+    emitter.on('ws-message', chatStore.handleWebSocketMessage);
+    emitter.on('ws-error', chatStore.handleWebSocketError);
+    emitter.on('ws-close', chatStore.handleWebSocketClose);
+    setInterval(chatStore.updateMessageTimes, 60000);
   }
 });
 
 onUnmounted(() => {
-  emitter.off('ws-open', handleWebsocketOpen);
-  emitter.off('ws-message', handleWebSocketMessage);
-  emitter.off('ws-error', handleWebSocketError);
-  emitter.off('ws-close', handleWebSocketClose);
+  emitter.off('ws-open', chatStore.handleWebSocketOpen);
+  emitter.off('ws-message', chatStore.handleWebSocketMessage);
+  emitter.off('ws-error', chatStore.handleWebSocketError);
+  emitter.off('ws-close', chatStore.handleWebSocketClose);
 });
+
+const deleteChat = (chatID) => {
+  chatStore.deleteChat(chatID);
+};
+
+const markChatAsRead = (chatID) => {
+  chatStore.markChatAsRead(chatID);
+};
+
+const formatTime = (timestamp) => {
+  return chatStore.formatTime(timestamp);
+};
 </script>

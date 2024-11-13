@@ -27,7 +27,6 @@ import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { userStore } from '@/stores/user';
 import axios from 'axios';
-import { addData, getData } from '@/utils/notifDB';
 import emitter from '@/eventBus';
 
 const store = userStore();
@@ -46,7 +45,6 @@ const fetchChatUnreadCount = async () => {
         }
       });
       unreadCount.value = response.data.unread_count;
-      addData('chats', { chat_id: 'messageCounter', unread_count: response.data.unread_count });
     } catch (error) {
       console.error('Error fetching unread message count:', error);
     } finally {
@@ -64,7 +62,6 @@ const fetchUnreadNotificationCount = async () => {
         }
       });
       unreadNotificationCount.value = response.data.unread_count;
-      addData('notifications', { id: 'notificationCounter', unread_count: response.data.unread_count });
     } catch (error) {
       console.error('Error fetching unread notifications count:', error);
     } finally {
@@ -86,11 +83,9 @@ const handleWebSocketMessage = (data) => {
 
     if (data.total_unread_count !== undefined) {
       unreadCount.value = data.total_unread_count;
-      addData('chats', { chat_id: 'messageCounter', total_unread_count: data.total_unread_count });
     }
     if (data.unread_notification_count !== undefined) {
       unreadNotificationCount.value = data.unread_notification_count;
-      addData('notifications', { id: 'notificationCounter', total_unread_count: data.unread_notification_count });
     }
   }
 };
@@ -109,7 +104,7 @@ const logout = () => {
   router.push('/login');
 };
 
-onMounted(async () => {
+onMounted(() => {
   emitter.on('ws-open', handleWebSocketOpen);
   emitter.on('ws-message', handleWebSocketMessage);
   emitter.on('ws-error', handleWebSocketError);
@@ -117,16 +112,10 @@ onMounted(async () => {
   emitter.on('notification-updated', fetchUnreadNotificationCount);
   emitter.on('chat-updated', fetchChatUnreadCount);
   emitter.on('chat-read', fetchChatUnreadCount);
-  
+
   if (store.user.isAuthenticated) {
-    const chatData = await getData('chats', 'messageCounter');
-    if (chatData) {
-      unreadCount.value = chatData.unread_count;
-    }
-    const notificationData = await getData('notifications', 'notificationCounter');
-    if (notificationData) {
-      unreadNotificationCount.value = notificationData.unread_count;
-    }
+    fetchChatUnreadCount();
+    fetchUnreadNotificationCount();
   }
 });
 
@@ -148,10 +137,9 @@ onUnmounted(() => {
   emitter.off('ws-close', handleWebSocketClose);
   emitter.off('notification-updated', fetchUnreadNotificationCount);
   emitter.off('chat-updated', fetchChatUnreadCount);
-  emitter.on('chat-read', fetchChatUnreadCount);
+  emitter.off('chat-read', fetchChatUnreadCount);
 });
 </script>
-
 
 
 <style scoped>
