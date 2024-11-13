@@ -52,28 +52,36 @@ func InitGoogleAuth() {
 }
 
 func AuthHandler(c *gin.Context) {
-	provider := c.Param("provider")
-	log.Println("AuthHandler triggered with provider:", provider)
-	if provider == "" {
-		c.String(http.StatusBadRequest, "You must select a provider")
-		log.Println("Error: No provider specified.")
-		return
-	}
+    provider := c.Param("provider")
+    log.Println("AuthHandler triggered with provider:", provider)
+    if provider == "" {
+        c.String(http.StatusBadRequest, "You must select a provider")
+        log.Println("Error: No provider specified.")
+        return
+    }
 
-	// Set provider as query parameter for Gothic
-	c.Request.URL.RawQuery = "provider=" + provider
+    // Set provider as query parameter for Gothic
+    c.Request.URL.RawQuery = "provider=" + provider
 
-	// Attempt to start the authentication session
-	session, err := gothic.Store.Get(c.Request, "gothic-session")
-	if err != nil {
-		log.Println("Error creating session in AuthHandler:", err)
-	} else {
-		log.Println("Session created in AuthHandler, session ID:", session.ID)
-	}
+    // Attempt to start the authentication session
+    session, err := gothic.Store.Get(c.Request, "gothic-session")
+    if err != nil {
+        log.Println("Error creating session in AuthHandler:", err)
+    } else {
+        // Set provider in session
+        session.Values["provider"] = provider
+        err = session.Save(c.Request, c.Writer)
+        if err != nil {
+            log.Println("Error saving session in AuthHandler:", err)
+        } else {
+            log.Println("Session created in AuthHandler, session ID:", session.ID)
+        }
+    }
 
-	// Begin authentication process with Gothic
-	gothic.BeginAuthHandler(c.Writer, c.Request)
+    // Begin authentication process with Gothic
+    gothic.BeginAuthHandler(c.Writer, c.Request)
 }
+
 
 
 func AuthCallback(c *gin.Context) {

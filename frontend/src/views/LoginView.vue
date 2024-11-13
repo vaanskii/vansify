@@ -68,7 +68,7 @@ const login = async () => {
 };
 
 const loginWithGoogle = () => {
-  window.location.href = '/api/v1/auth/google';
+  window.location.href = '/v1/auth/google';
 };
 
 </script>
