@@ -10,6 +10,7 @@ import ResetPassword from '@/views/ResetPassword.vue';
 import VerifyRegister from '@/views/VerifyRegister.vue';
 import NotificationsView from '@/views/NotificationsView.vue';
 import { userStore } from '@/stores/user';
+import GoogleCallback from '@/components/GoogleCallback.vue';
 
 const routes = [
   {
@@ -89,6 +90,14 @@ const routes = [
     component: NotificationsView,
     meta: {
       title: 'Notifications',
+    }
+  },
+  {
+    path: '/auth/google/callback',
+    name: 'google auth',
+    component: GoogleCallback,
+    meta: {
+      title: 'Blaaa',
     }
   }
 ];

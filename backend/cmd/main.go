@@ -19,6 +19,8 @@ import (
 func main() {
     db.ConnectToDatabase()
 
+    auth.InitGoogleAuth()
+
     r := gin.Default()
 
     // Enable global handling of Method Not Allowed
@@ -52,6 +54,10 @@ func main() {
         v1.DELETE("/delete-account", auth.AuthMiddleware(), auth.DeleteUser)
         v1.POST("/forgot-password", auth.ForgotPassword)
         v1.POST("/reset-password", auth.ResetPassword)
+
+        //google auth
+        v1.GET("/auth/:provider", auth.AuthHandler) 
+        v1.GET("/auth/:provider/callback", auth.AuthCallback)
 
         // refresh token
         v1.POST("/refresh-token", utils.RefreshToken)

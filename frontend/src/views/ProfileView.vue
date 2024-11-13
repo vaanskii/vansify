@@ -3,41 +3,33 @@
     <h1 v-if="userFound">User Profile: {{ user.username }}</h1>
     <div v-if="userFound">
       <div class="image-container">
-        <img v-if="imageIsLoaded" class="image" :src="user.profile_picture" alt="Profile Picture"/>
+        <img v-if="imageIsLoaded" class="image" :src="resolveProfilePicture(user.profile_picture)" alt="Profile Picture"/>
         <div v-else class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>
       </div>
       <p><strong>Gender:</strong> {{ user.gender }}</p>
-      <p>
-        <strong>Followers:</strong> 
-        <button @click="toggleFollowers">{{ user.followers_count }}</button>
-      </p>
-      <p>
-        <strong>Followings:</strong> 
-        <button @click="toggleFollowings">{{ user.followings_count }}</button>
-      </p>
-      <button v-if="!isCurrentUser" @click="toggleFollow">
-        {{ isFollowing ? 'Unfollow' : 'Follow' }}
-      </button>
-      <button v-if="!isCurrentUser && isAuthenticated" @click="handleChat">
-        Chat
-      </button>
+      <p><strong>Followers:</strong> <button @click="toggleFollowers">{{ user.followers_count }}</button></p>
+      <p><strong>Followings:</strong> <button @click="toggleFollowings">{{ user.followings_count }}</button></p>
+      <button v-if="!isCurrentUser" @click="toggleFollow">{{ isFollowing ? 'Unfollow' : 'Follow' }}</button>
+      <button v-if="!isCurrentUser && isAuthenticated" @click="handleChat">Chat</button>
       <button v-if="isCurrentUser && isAuthenticated" @click="deleteProfile">Delete Profile</button>
+
       <!-- Followers List -->
       <div v-if="showFollowers">
         <h3>Followers</h3>
         <ul>
           <li v-for="follower in followers" :key="follower.username">
-            <img :src="follower.profile_picture" alt="Profile Picture" class="small-image" />
+            <img :src="resolveProfilePicture(follower.profile_picture)" alt="Profile Picture" class="small-image" />
             <span @click="goToProfile(follower.username)">{{ follower.username }}</span>
           </li>
         </ul>
       </div>
+
       <!-- Followings List -->
       <div v-if="showFollowings">
         <h3>Followings</h3>
         <ul>
           <li v-for="following in followings" :key="following.username">
-            <img :src="following.profile_picture" alt="Profile Picture" class="small-image" />
+            <img :src="resolveProfilePicture(following.profile_picture)" alt="Profile Picture" class="small-image" />
             <span @click="goToProfile(following.username)">{{ following.username }}</span>
           </li>
         </ul>
@@ -79,6 +71,15 @@ const showFollowers = ref(false);
 const showFollowings = ref(false);
 const followers = ref([]);
 const followings = ref([]);
+
+function resolveProfilePicture(profilePicture) {
+  // Remove leading slash if it exists
+  if (profilePicture.startsWith('/')) {
+    profilePicture = profilePicture.substring(1);
+  }
+  return profilePicture.startsWith('http') ? profilePicture : `${profilePicture}`;
+}
+
 
 // Fetch followers for current or other user
 const fetchFollowers = async (username) => {

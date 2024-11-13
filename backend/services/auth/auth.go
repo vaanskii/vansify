@@ -47,7 +47,6 @@ func sendVerificationEmail(c *gin.Context, email string, token string) error {
 }
 
 // RegisterUser handles user registration
-// RegisterUser handles user registration
 func RegisterUser(c *gin.Context) {
     var user models.User
     if err := c.ShouldBindJSON(&user); err != nil {

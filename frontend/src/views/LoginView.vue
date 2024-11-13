@@ -1,6 +1,7 @@
 <template>
   <div>
     <form @submit.prevent="login">
+      <!-- Existing login form fields -->
       <div>
         <label for="username">Username:</label>
         <input type="text" v-model="username" id="username" required>
@@ -20,6 +21,7 @@
       </div>
       <button type="submit">Login</button>
     </form>
+    <button @click="loginWithGoogle">Login with Google</button>
     <div v-if="error" class="error">{{ error }}</div>
     <div v-if="message" class="message">{{ message }}</div>
   </div>
@@ -64,4 +66,9 @@ const login = async () => {
     error.value = err.response ? err.response.data.error : 'An error occurred';
   }
 };
+
+const loginWithGoogle = () => {
+  window.location.href = '/api/v1/auth/google';
+};
+
 </script>
