@@ -51,6 +51,8 @@ ARG SMTP_SERVER
 ARG SMTP_PORT
 ARG SMTP_USER
 ARG SMTP_PASS
+ARG GOOGLE_CLIENT_ID
+ARG GOOGLE_CLIENT_SECRET
 
 # Set environment variables using the ARG values
 ENV DB_USER=${DB_USER}
@@ -63,6 +65,8 @@ ENV SMTP_SERVER=${SMTP_SERVER}
 ENV SMTP_PORT=${SMTP_PORT}
 ENV SMTP_USER=${SMTP_USER}
 ENV SMTP_PASS=${SMTP_PASS}
+ENV GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+ENV GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
 
 # Command to run migrations and start the application
 CMD migrate -path /root/migrations -database "mysql://${DB_USER}:${DB_PASS}@tcp(${DB_HOST}:${DB_PORT})/${DB_NAME}?parseTime=true" up && ./main

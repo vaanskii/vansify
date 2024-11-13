@@ -11,7 +11,9 @@
       "SMTP_SERVER": "${{ SMTP_SERVER }}",
       "SMTP_PORT": "${{ SMTP_PORT }}",
       "SMTP_USER": "${{ SMTP_USER }}",
-      "SMTP_PASS": "${{ SMTP_PASS }}"
+      "SMTP_PASS": "${{ SMTP_PASS }}",
+      "GOOGLE_CLIENT_ID": "${{ GOOGLE_CLIENT_ID }}",
+      "GOOGLE_CLIENT_SECRET": "${{ GOOGLE_CLIENT_SECRET }}"
     }
   }
 }

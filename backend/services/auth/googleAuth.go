@@ -30,10 +30,7 @@ const (
 type ContextKey string
 
 func InitGoogleAuth() {
-	log.Println("Initializing Google authentication...")
-	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error loading .env file:", err)
-	}
+	godotenv.Load()
 
 	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
 	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
