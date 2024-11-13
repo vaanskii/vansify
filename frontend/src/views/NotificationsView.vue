@@ -29,7 +29,6 @@ import emitter from '@/eventBus';
 
 const store = userStore();
 const notificationStore = useNotificationStore();
-const router = useRouter();
 
 onMounted(() => {
   if (store.user.isAuthenticated) {
