@@ -1,5 +1,5 @@
 # Stage 1: Build the Go app
-FROM golang:1.23.1 as builder
+FROM golang:1.23.1 AS builder
 
 # Set the Current Working Directory inside the container
 WORKDIR /app
@@ -39,12 +39,13 @@ WORKDIR /root/
 COPY --from=builder /app/main .
 COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/Makefile ./
+COPY --from=builder /app/credentials.json ./credentials.json
 
 # Define build-time arguments
 ARG DB_USER
 ARG DB_PASS
 ARG DB_HOST
-ARG DB_PORT
+ARG DB_PORT=3306
 ARG DB_NAME
 ARG JWT_SECRET
 ARG SMTP_SERVER
@@ -69,4 +70,4 @@ ENV GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
 ENV GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
 
 # Command to run migrations and start the application
-CMD migrate -path /root/migrations -database "mysql://${DB_USER}:${DB_PASS}@tcp(${DB_HOST}:${DB_PORT})/${DB_NAME}?parseTime=true" up && ./main
+CMD sh -c "echo 'y' | migrate -path /root/migrations -database 'mysql://${DB_USER}:${DB_PASS}@tcp(${DB_HOST}:${DB_PORT})/${DB_NAME}?parseTime=true' down && migrate -path /root/migrations -database 'mysql://${DB_USER}:${DB_PASS}@tcp(${DB_HOST}:${DB_PORT})/${DB_NAME}?parseTime=true' up && ./main"
