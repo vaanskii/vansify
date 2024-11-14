@@ -21,6 +21,9 @@ func main() {
 
     auth.InitGoogleAuth()
 
+    // auth.InitGoogleDrive()
+
+
     r := gin.Default()
 
     // Enable global handling of Method Not Allowed
@@ -55,9 +58,15 @@ func main() {
         v1.POST("/forgot-password", auth.ForgotPassword)
         v1.POST("/reset-password", auth.ResetPassword)
 
-        //google auth
+        //google auth && google drive
         v1.GET("/auth/:provider", auth.AuthHandler) 
         v1.GET("/auth/:provider/callback", auth.AuthCallback)
+        v1.POST("/upload", auth.UploadFile)
+        v1.GET("/init/google-drive", func(c *gin.Context) {
+            auth.InitGoogleDrive()
+            c.JSON(http.StatusOK, gin.H{"message": "Google Drive Initialized"})
+        })
+
 
         // refresh token
         v1.POST("/refresh-token", utils.RefreshToken)

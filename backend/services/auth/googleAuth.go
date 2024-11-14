@@ -19,6 +19,7 @@ import (
 	"github.com/vaanskii/vansify/db"
 	"github.com/vaanskii/vansify/models"
 	"github.com/vaanskii/vansify/utils"
+	"golang.org/x/oauth2"
 )
 
 const (
@@ -30,26 +31,38 @@ const (
 type ContextKey string
 
 func InitGoogleAuth() {
-	godotenv.Load()
+    godotenv.Load()
 
-	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
-	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
+    googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
+    googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
+    googleScopes := []string{
+        "openid",                        
+        "profile",                       
+        "email",                         
+        "https://www.googleapis.com/auth/drive.file",
+        "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/drive",
+    }
 
-	store := sessions.NewCookieStore([]byte(key))
-	store.Options = &sessions.Options{
-		Path:     "/",
-		MaxAge:   MaxAge,
-		HttpOnly: true,
-		Secure:   IsProd,
-	}
-	gothic.Store = store
+    store := sessions.NewCookieStore([]byte(key))
+    store.Options = &sessions.Options{
+        Path:     "/",
+        MaxAge:   MaxAge,
+        HttpOnly: true,
+        Secure:   IsProd,
+    }
+    gothic.Store = store
 
-	// Initialize Google provider
-	goth.UseProviders(
-		google.New(googleClientID, googleClientSecret, "http://localhost:8080/v1/auth/google/callback"),
-	)
-	log.Println("Google provider initialized.")
+    log.Println("Initializing Google provider with Client ID:", googleClientID)
+    log.Println("Using Scopes:", googleScopes)
+
+    // Initialize Google provider with updated scopes
+    goth.UseProviders(
+        google.New(googleClientID, googleClientSecret, "http://localhost:8080/v1/auth/google/callback", googleScopes...),
+    )
+    log.Println("Google provider initialized with scopes.")
 }
+
 
 func AuthHandler(c *gin.Context) {
     provider := c.Param("provider")
@@ -108,6 +121,16 @@ func AuthCallback(c *gin.Context) {
         return
     }
 
+    // Create OAuth2 token from the user token
+    token := &oauth2.Token{
+        AccessToken:  user.AccessToken,
+        RefreshToken: user.RefreshToken,
+        Expiry:       user.ExpiresAt,
+    }
+
+    // Save the token for future use
+    saveToken("token.json", token)
+
     // Check if the user already exists in the database
     var existingUser models.User
     err = db.DB.QueryRow("SELECT id, username, password, email FROM users WHERE email = ?", user.Email).Scan(&existingUser.ID, &existingUser.Username, &existingUser.Password, &existingUser.Email)
@@ -160,7 +183,7 @@ func AuthCallback(c *gin.Context) {
         c.String(http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
         return
     }
-    
+
     userID, _ := result.LastInsertId()
 
     accessToken, err := utils.GenerateAccessToken(newUser.Username)
