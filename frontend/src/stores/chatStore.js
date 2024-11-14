@@ -18,9 +18,11 @@ export const useChatStore = defineStore('chatStore', () => {
           user: chat.user,
           unread_count: chat.unread_count,
           last_message_time: chat.last_message_time,
-          profile_picture: chat.profile_picture
+          profile_picture: chat.profile_picture,
+          last_message: chat.last_message
         }));
         chats.value = newChats;
+        console.log("Chats fetched:", newChats);
         loader.value = false;
       } else {
         chats.value = [];
@@ -78,7 +80,8 @@ export const useChatStore = defineStore('chatStore', () => {
           last_message_time: data.last_message_time || new Date().toISOString(),
           message: data.message,
           user: data.user,
-          profile_picture: data.profile_picture
+          profile_picture: data.profile_picture,
+          last_message: data.last_message
         };
       } else {
         chats.value.push({
@@ -87,7 +90,8 @@ export const useChatStore = defineStore('chatStore', () => {
           unread_count: data.unread_count,
           last_message_time: data.last_message_time || new Date().toISOString(),
           message: data.message,
-          profile_picture: data.profile_picture
+          profile_picture: data.profile_picture,
+          last_message: data.last_message
         });
       }
       chats.value = chats.value.slice().sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));

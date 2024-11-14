@@ -201,6 +201,14 @@ func ChatWsHandler(c *gin.Context) {
             recipientUsername = chat.User1
         }
 
+        var lastMessage string
+        err = db.DB.QueryRow("SELECT message FROM messages WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1", chatID).Scan(&lastMessage)
+        if err != nil {
+            log.Println("Error querying last message:", err)
+        }
+
+        log.Println("last message", lastMessage)
+
         var recipientID int
         err = db.DB.QueryRow("SELECT id FROM users WHERE username = ?", recipientUsername).Scan(&recipientID)
         if err != nil {
@@ -228,6 +236,7 @@ func ChatWsHandler(c *gin.Context) {
                         "profile_picture":   profilePicture,
                         "sender":            claims.Username,
                         "last_message_time": time.Now().Format(time.RFC3339),
+                        "last_message":      lastMessage,
                     })
                     notifications.GlobalNotificationHub.BroadcastNotification(chatNotificationMessage)
                 }
@@ -371,30 +380,48 @@ func DeleteMessage(c *gin.Context) {
     messageID := c.Param("messageID")
 
     var message models.Message
-    err := db.DB.QueryRow("SELECT id, username FROM messages WHERE id = ?", messageID).Scan(&message.ID, &message.Username)
+    err := db.DB.QueryRow("SELECT id, chat_id, username FROM messages WHERE id = ?", messageID).Scan(&message.ID, &message.ChatID, &message.Username)
     if err != nil {
+        log.Println("Query error: Incorrect message ID:", err)
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Incorrect message ID"})
         return
     }
     if message.Username != username {
+        log.Println("Unauthorized: User does not have permission to delete this message")
         c.JSON(http.StatusUnauthorized, gin.H{"error": "You do not have permission to delete this message"})
         return
     }
 
     _, err = db.DB.Exec("DELETE FROM messages WHERE id = ?", messageID)
     if err != nil {
+        log.Println("Database error: Error deleting message:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting message"})
         return
     }
 
+    log.Println("Message deleted successfully, Message ID:", messageID)
+
+    // Fetch the last message and last message time
+    var lastMessage, lastMessageTime string
+    err = db.DB.QueryRow("SELECT message, created_at FROM messages WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1", message.ChatID).Scan(&lastMessage, &lastMessageTime)
+    if err != nil {
+        log.Println("Query error: Error fetching last message:", err)
+        lastMessage = ""
+        lastMessageTime = ""
+    }
+    log.Printf("Last message after deletion: '%s' at '%s'", lastMessage, lastMessageTime)
+
     // Broadcast deletion to all connected clients
     deleteMessage := map[string]interface{}{
-        "type":      "MESSAGE_DELETED",
-        "message_id": messageID,
+        "type":             "MESSAGE_DELETED",
+        "message_id":       messageID,
+        "chat_id":          message.ChatID,
+        "last_message":     lastMessage,
+        "last_message_time": lastMessageTime,
     }
     broadcastMessage, _ := json.Marshal(deleteMessage)
-    log.Printf("Broadcasting delete message: %s", broadcastMessage)
-    hub.BroadcastMessage(nil, websocket.TextMessage, broadcastMessage) 
+    log.Printf("Broadcasting delete message: %v", deleteMessage)
+    hub.BroadcastMessage(nil, websocket.TextMessage, broadcastMessage)
 
     c.JSON(http.StatusOK, gin.H{"message": "Message deleted successfully"})
 }

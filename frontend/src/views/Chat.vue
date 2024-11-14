@@ -174,7 +174,8 @@ const connectWebSocket = (chatID, token) => {
             messages.value.push({
               ...message,
               isOwnMessage: message.username === username,
-              profile_picture: `/${message.profile_picture}`
+              profile_picture: `/${message.profile_picture}`,
+              last_message: message.last_message
             });
           }
         }

@@ -12,7 +12,8 @@
           {{ chat.user }}
           <span v-if="chat.unread_count > 0">({{ chat.unread_count }})</span>
           <br>
-          <span>{{ formatTime(chat.last_message_time) }}</span>
+          <span>{{ formatTime(chat.last_message_time) }}</span> - 
+          <span>{{ chat.last_message }}</span>
         </router-link>
         <button @click="deleteChat(chat.chat_id)">Delete</button>
       </li>
