@@ -21,7 +21,7 @@ func main() {
 
     auth.InitGoogleAuth()
 
-    // auth.InitGoogleDrive()
+    auth.InitGoogleDrive()
 
 
     r := gin.Default()
