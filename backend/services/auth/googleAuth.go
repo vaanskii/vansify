@@ -8,7 +8,6 @@ import (
 	"math/big"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/sessions"
@@ -27,6 +26,11 @@ const (
 	MaxAge = 86400 * 30
 	IsProd = false
 )
+
+type UserRequest struct {
+    Username string `json:"username" binding:"required"`
+    Email    string `json:"email" binding:"required"`
+}
 
 type ContextKey string
 
@@ -91,7 +95,6 @@ func AuthHandler(c *gin.Context) {
         }
     }
 
-    // Begin authentication process with Gothic
     gothic.BeginAuthHandler(c.Writer, c.Request)
 }
 
@@ -99,14 +102,11 @@ func AuthHandler(c *gin.Context) {
 
 func AuthCallback(c *gin.Context) {
     provider := c.Param("provider")
-
-    // Add provider to context
     type contextKey string
     const providerKey contextKey = "provider"
     ctx := context.WithValue(c.Request.Context(), providerKey, provider)
     c.Request = c.Request.WithContext(ctx)
 
-    // Attempt to retrieve session
     session, err := gothic.Store.Get(c.Request, "gothic-session")
     if err != nil {
         log.Println("Error retrieving session in AuthCallback:", err)
@@ -114,24 +114,20 @@ func AuthCallback(c *gin.Context) {
         log.Println("Session retrieved in AuthCallback, session ID:", session.ID)
     }
 
-    // Complete authentication and get user
     user, err := gothic.CompleteUserAuth(c.Writer, c.Request)
     if err != nil {
         c.String(http.StatusBadRequest, fmt.Sprint(err))
         return
     }
 
-    // Create OAuth2 token from the user token
     token := &oauth2.Token{
         AccessToken:  user.AccessToken,
         RefreshToken: user.RefreshToken,
         Expiry:       user.ExpiresAt,
     }
 
-    // Save the token for future use
     saveToken("token.json", token)
 
-    // Check if the user already exists in the database
     var existingUser models.User
     err = db.DB.QueryRow("SELECT id, username, password, email FROM users WHERE email = ?", user.Email).Scan(&existingUser.ID, &existingUser.Username, &existingUser.Password, &existingUser.Email)
     if err == nil {
@@ -151,33 +147,44 @@ func AuthCallback(c *gin.Context) {
             return
         }
 
-        // Redirect to frontend with user information and tokens
         c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:5173/auth/google/callback?email=%s&username=%s&access_token=%s&refresh_token=%s&id=%d", existingUser.Email, existingUser.Username, accessToken, refreshToken, existingUser.ID))
         return
     }
 
-    // Generate a secure password
-    password := generatePassword()
+    c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:5173/choose-username?email=%s", user.Email))
+}
 
-    // Extract and clean username from email
-    newUsername := cleanUsername(user.Email)
 
-    // Create a User model instance
-    newUser := models.User{
-        Username: newUsername,
-        Password: password,
-        Email:    user.Email,
+func CreateUserWithUsername(c *gin.Context) {
+    var userReq UserRequest
+    if err := c.BindJSON(&userReq); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+        return
     }
 
-    // Hash the password
+    var existingUsername string
+    err := db.DB.QueryRow("SELECT username FROM users WHERE username = ?", userReq.Username).Scan(&existingUsername)
+    if err == nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Username already taken"})
+        return
+    }
+
+    password := generatePassword()
+
+    newUser := models.User{
+        Username:       userReq.Username,
+        Password:       password,
+        Email:          userReq.Email,
+        Verified:        true,
+    }
+
     err = newUser.HashPassword()
     if err != nil {
         c.String(http.StatusInternalServerError, fmt.Sprintf("Password hashing error: %v", err))
         return
     }
 
-    // Insert user into the database
-    result, err := db.DB.Exec("INSERT INTO users (username, password, email) VALUES (?, ?, ?)", newUser.Username, newUser.Password, newUser.Email)
+    result, err := db.DB.Exec("INSERT INTO users (username, password, email, verified) VALUES (?, ?, ?, ?)", newUser.Username, newUser.Password, newUser.Email, newUser.Verified)
     if err != nil {
         log.Println("Database error:", err)
         c.String(http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
@@ -198,20 +205,15 @@ func AuthCallback(c *gin.Context) {
         return
     }
 
-    c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:5173/auth/google/callback?email=%s&username=%s&access_token=%s&refresh_token=%s&id=%d", newUser.Email, newUser.Username, accessToken, refreshToken, userID))
+    c.JSON(http.StatusOK, gin.H{
+        "access_token":  accessToken,
+        "refresh_token": refreshToken,
+        "username":      newUser.Username,
+        "email":         newUser.Email,
+        "id":            userID,
+    })
 }
 
-
-func cleanUsername(email string) string {
-    username := email[:strings.Index(email, "@")]
-    cleanedUsername := ""
-    for _, char := range username {
-        if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') {
-            cleanedUsername += string(char)
-        }
-    }
-    return cleanedUsername
-}
 
 func generatePassword() string {
     const passwordLength = 12

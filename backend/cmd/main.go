@@ -66,6 +66,7 @@ func main() {
             auth.InitGoogleDrive()
             c.JSON(http.StatusOK, gin.H{"message": "Google Drive Initialized"})
         })
+        v1.POST("/create-user", auth.CreateUserWithUsername)
 
 
         // refresh token

@@ -1,6 +1,5 @@
 <template>
-  <h1 v-if="chatStore.loader">Loading</h1>
-  <div v-else>
+  <div>
     <h1>Your Chats</h1>
     <ul v-if="chatStore.chats.length > 0">
       <li v-for="chat in sortedChats" :key="chat.chat_id">

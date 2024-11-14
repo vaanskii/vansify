@@ -11,6 +11,7 @@ import VerifyRegister from '@/views/VerifyRegister.vue';
 import NotificationsView from '@/views/NotificationsView.vue';
 import { userStore } from '@/stores/user';
 import GoogleCallback from '@/components/GoogleCallback.vue';
+import ChooseUsername from '@/components/ChooseUsername.vue';
 
 const routes = [
   {
@@ -97,7 +98,15 @@ const routes = [
     name: 'google auth',
     component: GoogleCallback,
     meta: {
-      title: 'Blaaa',
+      title: 'google callback',
+    }
+  },
+  {
+    path: '/choose-username',
+    name: 'ChooseUsername',
+    component: ChooseUsername,
+    meta: {
+      title: 'Choose Username',
     }
   }
 ];
