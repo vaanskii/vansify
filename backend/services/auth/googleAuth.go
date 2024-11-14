@@ -176,6 +176,7 @@ func CreateUserWithUsername(c *gin.Context) {
         Password:       password,
         Email:          userReq.Email,
         Verified:        true,
+        OauthUser:      true,
     }
 
     err = newUser.HashPassword()
@@ -184,7 +185,7 @@ func CreateUserWithUsername(c *gin.Context) {
         return
     }
 
-    result, err := db.DB.Exec("INSERT INTO users (username, password, email, verified) VALUES (?, ?, ?, ?)", newUser.Username, newUser.Password, newUser.Email, newUser.Verified)
+    result, err := db.DB.Exec("INSERT INTO users (username, password, email, verified, oauth_user) VALUES (?, ?, ?, ?, ?)", newUser.Username, newUser.Password, newUser.Email, newUser.Verified, newUser.OauthUser)
     if err != nil {
         log.Println("Database error:", err)
         c.String(http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
@@ -211,6 +212,7 @@ func CreateUserWithUsername(c *gin.Context) {
         "username":      newUser.Username,
         "email":         newUser.Email,
         "id":            userID,
+        "oauth_user":    newUser.OauthUser,
     })
 }
 

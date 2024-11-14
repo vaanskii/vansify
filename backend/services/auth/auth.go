@@ -2,6 +2,7 @@ package auth
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -117,8 +118,8 @@ func RegisterUser(c *gin.Context) {
     user.Verified = false
 
     // Save user to the database
-    _, err = db.DB.Exec("INSERT INTO users (username, password, email, profile_picture, gender, verified) VALUES (?, ?, ?, ?, ?, ?)", 
-        user.Username, user.Password, user.Email, user.ProfilePicture, user.Gender, user.Verified)
+    _, err = db.DB.Exec("INSERT INTO users (username, password, email, profile_picture, gender, verified, oauth_user) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+        user.Username, user.Password, user.Email, user.ProfilePicture, user.Gender, user.Verified, user.OauthUser)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error saving user to database"})
         return
@@ -188,14 +189,17 @@ func LoginUser(c *gin.Context) {
         "id": dbUser.ID,
         "username": dbUser.Username,
         "email": dbUser.Email,
+        "oauth_user": dbUser.OauthUser,
     })
 }
 
-// Delete user function
 func DeleteUser(c *gin.Context) {
+    log.Println("DeleteUser request received")
+
     // Retrieve the claims from the context set by the middleware
     claims, exists := c.Get("claims")
     if !exists {
+        log.Println("No claims found in context")
         c.JSON(http.StatusUnauthorized, gin.H{"error": "No claims found"})
         return
     }
@@ -203,19 +207,30 @@ func DeleteUser(c *gin.Context) {
     // Assuming claims is of type *utils.CustomClaims
     customClaims, ok := claims.(*utils.CustomClaims)
     if !ok {
+        log.Println("Invalid token claims:", claims)
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
         return
     }
 
     // Get username from claims
     username := customClaims.Username
+    log.Println("Deleting user account for username:", username)
 
     // Delete the user from the database
-    _, err := db.DB.Exec("DELETE FROM users WHERE username = ?", username)
+    result, err := db.DB.Exec("DELETE FROM users WHERE username = ?", username)
     if err != nil {
+        log.Println("Error executing DELETE query:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting user account"})
         return
     }
 
+    rowsAffected, _ := result.RowsAffected()
+    if rowsAffected == 0 {
+        log.Println("No rows affected, user might not exist:", username)
+        c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+        return
+    }
+
+    log.Println("Account deleted successfully for username:", username)
     c.JSON(http.StatusOK, gin.H{"message": "Account deleted successfully"})
 }

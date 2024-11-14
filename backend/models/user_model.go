@@ -14,6 +14,7 @@ type User struct {
 	ProfilePicture    string      `json:"profile_picture"`
 	Gender 			 string   	 `json:"gender"`
 	Verified 		  bool 	  	  `json:"verified"`
+	OauthUser        bool         `json:"oauth_user"`
 	CreatedAt  		 time.Time   `json:"created_at"`
 	Followers        []User      `json:"followers"`
 	Followings       []User      `json:"followings"`

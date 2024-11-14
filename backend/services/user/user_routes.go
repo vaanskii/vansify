@@ -20,6 +20,7 @@ type UserProfile struct {
 	Followings      []Following   `json:"followings"`
 	ProfilePicture   string        `json:"profile_picture"`
 	Gender 			string   	  `json:"gender"`
+    OauthUser       bool          `json:"oauth_user"`
 }
 
 type Follower struct {
@@ -38,7 +39,7 @@ func GetUserByUsername(c *gin.Context) {
     var user models.User
 
     // Fetch user details by username
-    err := db.DB.QueryRow("SELECT id, username, email, profile_picture, gender, verified, created_at FROM users WHERE username = ?", username).Scan(&user.ID, &user.Username, &user.Email, &user.ProfilePicture, &user.Gender, &user.Verified, &user.CreatedAt)
+    err := db.DB.QueryRow("SELECT id, username, email, profile_picture, gender, verified, created_at, oauth_user FROM users WHERE username = ?", username).Scan(&user.ID, &user.Username, &user.Email, &user.ProfilePicture, &user.Gender, &user.Verified, &user.CreatedAt, &user.OauthUser)
     if err != nil {
         c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
         return
@@ -50,6 +51,7 @@ func GetUserByUsername(c *gin.Context) {
         Username:       user.Username,
         ProfilePicture:  user.ProfilePicture,
         Gender:         user.Gender,
+        OauthUser:      user.OauthUser,
     }
 
     // Fetch follower count

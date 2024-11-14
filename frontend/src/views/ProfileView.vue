@@ -158,6 +158,7 @@ onMounted(async () => {
       },
     });
     user.value = response.data;
+    console.log(user.value)
     user.value.profile_picture = `/${user.value.profile_picture}`;
     imageIsLoaded.value = true;
     // Check follow status

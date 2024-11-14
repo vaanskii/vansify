@@ -33,7 +33,7 @@ func InitGoogleDrive() {
     }
 
     // Create OAuth2 config to generate the client
-    config := &oauth2.Config{} // Dummy config as we only need the token
+    config := &oauth2.Config{}
     client := config.Client(ctx, tok)
 
     // Initialize the Drive service
