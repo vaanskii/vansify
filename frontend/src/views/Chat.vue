@@ -113,7 +113,11 @@ const updateMessageTimes = () => {
 
 const deleteMessage = async (messageID) => {
   try {
-    await axios.delete(`/v1/message/${messageID}`);
+    await axios.delete(`/v1/message/${messageID}`, {
+      headers: {
+        Authorization: `Bearer ${store.user.access}`
+      }
+    });
     messages.value = messages.value.filter(message => message.id !== messageID);
   } catch (err) {
     console.error("Error deleting message:", err);
@@ -190,7 +194,11 @@ const connectWebSocket = (chatID, token) => {
 // Fetch chat history
 const fetchChatHistory = async (chatID) => {
   try {
-    const response = await axios.get(`/v1/chat/${chatID}/history?user=${route.query.user}`);
+    const response = await axios.get(`/v1/chat/${chatID}/history?user=${route.query.user}`, {
+      headers: {
+        Authorization: `Bearer ${store.user.access}`
+      }
+    });
     if (response.data) {
       const newMessages = response.data.map(message => {
         return {
@@ -220,7 +228,11 @@ const fetchChatHistory = async (chatID) => {
 
 const markChatNotificationsAsRead = async (chatID) => {
   try {
-    await axios.post(`/v1/notifications/chat/mark-read/${chatID}`);
+    await axios.post(`/v1/notifications/chat/mark-read/${chatID}`, {}, {
+      headers: {
+        Authorization: `Bearer ${store.user.access}`
+      }
+    });
     emitter.emit('chat-read', chatID);
   } catch (error) {
     console.error('Error marking notifications as read:', error);

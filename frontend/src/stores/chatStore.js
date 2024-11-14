@@ -2,16 +2,22 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import axios from 'axios';
 import emitter from '@/eventBus';
+import { userStore } from './user';
 
 export const useChatStore = defineStore('chatStore', () => {
   const chats = ref([]);
   const error = ref('');
   const wsConnected = ref(false);
   const loader = ref(true);
+  const store = userStore();
 
   const fetchChats = async () => {
     try {
-      const response = await axios.get('/v1/me/chats');
+      const response = await axios.get('/v1/me/chats', {
+        headers: {
+          Authorization: `Bearer ${store.user.access}`
+        }
+      });
       if (response.data && response.data.chats) {
         const newChats = response.data.chats.map(chat => ({
           chat_id: chat.chat_id,
@@ -35,7 +41,11 @@ export const useChatStore = defineStore('chatStore', () => {
 
   const deleteChat = async (chatID) => {
     try {
-      await axios.delete(`/v1/chat/${chatID}`);
+      await axios.delete(`/v1/chat/${chatID}`, {
+        headers: { 
+          Authorization: `Bearer ${store.user.access}` 
+        }
+      });
       chats.value = chats.value.filter(chat => chat.chat_id !== chatID);
     } catch (err) {
       error.value = err.response ? err.response.data.error : 'An error occurred';
@@ -102,7 +112,11 @@ export const useChatStore = defineStore('chatStore', () => {
 
   const markChatAsRead = async (chatID) => {
     try {
-      await axios.post(`/v1/notifications/chat/mark-read/${chatID}`);
+      await axios.post(`/v1/notifications/chat/mark-read/${chatID}`, {}, {
+        headers: {
+          Authorization: `Bearer ${store.user.access}`
+        }
+      });
       chats.value = chats.value.map(chat =>
         chat.chat_id === chatID ? { ...chat, unread_count: 0 } : chat
       );

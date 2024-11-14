@@ -84,7 +84,11 @@ function resolveProfilePicture(profilePicture) {
 // Fetch followers for current or other user
 const fetchFollowers = async (username) => {
   try {
-    const response = await axios.get(`/v1/followers/${username}`);
+    const response = await axios.get(`/v1/followers/${username}`, {
+      headers: {
+        Authorization: `Bearer ${store.user.access}`,
+      },
+    });
     followers.value = response.data.followers;
   } catch (error) {
     console.error('Error fetching followers:', error);
@@ -93,7 +97,11 @@ const fetchFollowers = async (username) => {
 
 const deleteProfile = async () => {
   try {
-    await axios.delete(`/v1/delete-account`);
+    await axios.delete(`/v1/delete-account`, {
+      headers: {
+        Authorization: `Bearer ${store.user.access}`,
+      },
+    });
     store.removeToken();
     router.push({ path: '/login' });
   } catch (error) {
@@ -104,7 +112,11 @@ const deleteProfile = async () => {
 // Fetch followings for current or other user
 const fetchFollowings = async (username) => {
   try {
-    const response = await axios.get(`/v1/following/${username}`);
+    const response = await axios.get(`/v1/following/${username}`, {
+      headers: {
+        Authorization: `Bearer ${store.user.access}`,
+      },
+    });
     followings.value = response.data.followings;
   } catch (error) {
     console.error('Error fetching followings:', error);
@@ -140,12 +152,20 @@ onMounted(async () => {
   isCurrentUser.value = username === loggedInUsername;
   try {
     // Fetch user details
-    const response = await axios.get(`/v1/user/${username}`);
+    const response = await axios.get(`/v1/user/${username}`, {
+      headers: {
+        Authorization: `Bearer ${store.user.access}`,
+      },
+    });
     user.value = response.data;
     user.value.profile_picture = `/${user.value.profile_picture}`;
     imageIsLoaded.value = true;
     // Check follow status
-    const followStatusResponse = await axios.get(`/v1/is-following/${loggedInUsername}/${username}`);
+    const followStatusResponse = await axios.get(`/v1/is-following/${loggedInUsername}/${username}`, {
+      headers: {
+        Authorization: `Bearer ${store.user.access}`,
+      },
+    });
     isFollowing.value = followStatusResponse.data.is_following;
   } catch (error) {
     console.error('Error fetching user details or follow status:', error);

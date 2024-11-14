@@ -2,12 +2,14 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import axios from 'axios';
 import { userStore } from '@/stores/user';
+import { useRouter } from 'vue-router';
 import emitter from '@/eventBus';
 
 export const useNotificationStore = defineStore('notificationStore', () => {
   const store = userStore();
   const notifications = ref([]);
   const loader = ref(true);
+  const router = useRouter();
 
   const fetchNotifications = async () => {
     try {

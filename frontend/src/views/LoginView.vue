@@ -68,7 +68,7 @@ const login = async () => {
 };
 
 const loginWithGoogle = () => {
-  window.location.href = 'https://backend-production-7ff8.up.railway.app/v1/auth/google';
+  window.location.href = '/api/v1/auth/google';
 };
 
 </script>

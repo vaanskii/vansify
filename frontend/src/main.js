@@ -9,10 +9,11 @@ import router from './router'
 axios.defaults.baseURL = import.meta.env.VITE_API_URL
 
 const app = createApp(App)
+const pinia = createPinia()
 
-app.use(createPinia())
-app.use(router)
+app.use(pinia)
+app.use(router, axios)
 
-app.mount('#app')
 const store = userStore();
 store.initStore();
+app.mount('#app')
