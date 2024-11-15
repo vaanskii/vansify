@@ -35,7 +35,11 @@ type UserRequest struct {
 type ContextKey string
 
 func InitGoogleAuth() {
-    godotenv.Load()
+    // Load environment variables
+    err := godotenv.Load()
+    if err != nil {
+        log.Fatalf("Error loading .env file: %v", err)
+    }
 
     googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
     googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
@@ -60,12 +64,15 @@ func InitGoogleAuth() {
     log.Println("Initializing Google provider with Client ID:", googleClientID)
     log.Println("Using Scopes:", googleScopes)
 
-    // Initialize Google provider with updated scopes
-    goth.UseProviders(
-        google.New(googleClientID, googleClientSecret, "http://localhost:8080/v1/auth/google/callback", googleScopes...),
-    )
-    log.Println("Google provider initialized with scopes.")
+    // Initialize Google provider with updated scopes and access type
+    googleProvider := google.New(googleClientID, googleClientSecret, "http://localhost:8080/v1/auth/google/callback", googleScopes...)
+    googleProvider.SetAccessType("offline")
+    googleProvider.SetPrompt("consent")
+    goth.UseProviders(googleProvider)
+
+    log.Println("Google provider initialized with scopes and offline access.")
 }
+
 
 
 func AuthHandler(c *gin.Context) {

@@ -7,16 +7,17 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 )
 
 var driveService *drive.Service
 
-// Initialize Google Drive client
 func InitGoogleDrive() {
     ctx := context.Background()
 
@@ -32,8 +33,20 @@ func InitGoogleDrive() {
         return
     }
 
+    // Check if the token is expired and refresh it if necessary
+    if tok.Expiry.Before(time.Now()) {
+        tok, err = refreshAccessToken(tok)
+        if err != nil {
+            log.Fatalf("Unable to refresh access token: %v", err)
+        }
+    }
+
     // Create OAuth2 config to generate the client
-    config := &oauth2.Config{}
+    config := &oauth2.Config{
+        ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+        ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+        Endpoint:     google.Endpoint,
+    }
     client := config.Client(ctx, tok)
 
     // Initialize the Drive service
@@ -51,7 +64,26 @@ func InitGoogleDrive() {
     log.Printf("Found %d files in Google Drive.", len(fileList.Files))
 }
 
-// Reads the OAuth2 token from the specified file
+func refreshAccessToken(tok *oauth2.Token) (*oauth2.Token, error) {
+    config := &oauth2.Config{
+        ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+        ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+        Scopes:       []string{drive.DriveScope},
+        Endpoint:     google.Endpoint,
+    }
+
+    // Use the refresh token to get a new access token
+    newToken, err := config.TokenSource(context.Background(), tok).Token()
+    if err != nil {
+        return nil, fmt.Errorf("unable to refresh token: %v", err)
+    }
+
+    // Save the new token to the file
+    saveToken("token.json", newToken)
+
+    return newToken, nil
+}
+
 func tokenFromFile(file string) (*oauth2.Token, error) {
     f, err := os.Open(file)
     if err != nil {
@@ -64,7 +96,6 @@ func tokenFromFile(file string) (*oauth2.Token, error) {
     return tok, err
 }
 
-// Saves the OAuth2 token to the specified file
 func saveToken(path string, token *oauth2.Token) {
     fmt.Printf("Saving credential file to: %s\n", path)
     f, err := os.Create(path)
@@ -76,7 +107,6 @@ func saveToken(path string, token *oauth2.Token) {
     json.NewEncoder(f).Encode(token)
 }
 
-// Handles file uploads to Google Drive
 func UploadFile(c *gin.Context) {
     file, header, err := c.Request.FormFile("file")
     if err != nil {
