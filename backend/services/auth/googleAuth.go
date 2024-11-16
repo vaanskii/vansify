@@ -67,7 +67,6 @@ func InitGoogleAuth() {
     // Initialize Google provider with updated scopes and access type
     googleProvider := google.New(googleClientID, googleClientSecret, "http://localhost:8080/v1/auth/google/callback", googleScopes...)
     googleProvider.SetAccessType("offline")
-    googleProvider.SetPrompt("consent")
     goth.UseProviders(googleProvider)
 
     log.Println("Google provider initialized with scopes and offline access.")

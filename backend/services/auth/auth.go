@@ -182,7 +182,6 @@ func LoginUser(c *gin.Context) {
         c.SetCookie("refresh_token", refreshToken, 7*24*3600, "/", "", false, true)
     }
 
-    // Include user details in the response
     c.JSON(http.StatusOK, gin.H{
         "access_token": accessToken,
         "refresh_token": refreshToken,

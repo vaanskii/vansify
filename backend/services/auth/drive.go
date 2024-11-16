@@ -21,23 +21,23 @@ var driveService *drive.Service
 func InitGoogleDrive() {
     ctx := context.Background()
 
-    // Load the token from the file
     tokFile := "token.json"
     tok, err := tokenFromFile(tokFile)
     if err != nil {
         if os.IsNotExist(err) {
-            log.Fatalf("Token file not found. Please authenticate using the authentication flow.")
+            log.Println("Token file not found. Please authenticate using the authentication flow.")
+            return
         } else {
             log.Fatalf("Failed to load token from file: %v", err)
         }
-        return
     }
 
-    // Check if the token is expired and refresh it if necessary
     if tok.Expiry.Before(time.Now()) {
         tok, err = refreshAccessToken(tok)
         if err != nil {
-            log.Fatalf("Unable to refresh access token: %v", err)
+            log.Printf("Unable to refresh access token: %v", err)
+            log.Println("Please authenticate using the authentication flow.")
+            return
         }
     }
 
@@ -45,24 +45,33 @@ func InitGoogleDrive() {
     config := &oauth2.Config{
         ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
         ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-        Endpoint:     google.Endpoint,
+        Scopes: []string{
+            "https://www.googleapis.com/auth/drive.file",
+            "https://www.googleapis.com/auth/drive.readonly",
+            "https://www.googleapis.com/auth/drive",
+        },
+        Endpoint: oauth2.Endpoint{
+            AuthURL:  "https://accounts.google.com/o/oauth2/auth",
+            TokenURL: "https://accounts.google.com/o/oauth2/token",
+        },
     }
+
     client := config.Client(ctx, tok)
 
     // Initialize the Drive service
-    driveService, err = drive.NewService(ctx, option.WithHTTPClient(client))
+    driveService, err := drive.NewService(ctx, option.WithHTTPClient(client))
     if err != nil {
         log.Fatalf("Unable to retrieve Drive client: %v", err)
     }
     log.Println("Google Drive client initialized.")
 
-    // Use driveService to list files as a placeholder action
     fileList, err := driveService.Files.List().Do()
     if err != nil {
         log.Fatalf("Unable to retrieve files: %v", err)
     }
     log.Printf("Found %d files in Google Drive.", len(fileList.Files))
 }
+
 
 func refreshAccessToken(tok *oauth2.Token) (*oauth2.Token, error) {
     config := &oauth2.Config{
