@@ -135,7 +135,7 @@ func AuthCallback(c *gin.Context) {
     saveToken("token.json", token)
 
     var existingUser models.User
-    err = db.DB.QueryRow("SELECT id, username, password, email FROM users WHERE email = ?", user.Email).Scan(&existingUser.ID, &existingUser.Username, &existingUser.Password, &existingUser.Email)
+    err = db.DB.QueryRow("SELECT id, username, password, email, oauth_user FROM users WHERE email = ?", user.Email).Scan(&existingUser.ID, &existingUser.Username, &existingUser.Password, &existingUser.Email, &existingUser.OauthUser)
     if err == nil {
         log.Println("User already exists:", existingUser.Email)
         // Generate tokens for existing user
@@ -153,7 +153,7 @@ func AuthCallback(c *gin.Context) {
             return
         }
 
-        c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:5173/auth/google/callback?email=%s&username=%s&access_token=%s&refresh_token=%s&id=%d", existingUser.Email, existingUser.Username, accessToken, refreshToken, existingUser.ID))
+        c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:5173/auth/google/callback?email=%s&username=%s&access_token=%s&refresh_token=%s&id=%d&oauth_user=%t", existingUser.Email, existingUser.Username, accessToken, refreshToken, existingUser.ID, existingUser.OauthUser))
         return
     }
 
