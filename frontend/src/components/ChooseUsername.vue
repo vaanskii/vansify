@@ -11,43 +11,46 @@
   </template>
   
   <script setup>
-  import { ref } from 'vue';
-  import { useRouter, useRoute } from 'vue-router';
-  import axios from 'axios';
-  import { userStore } from '@/stores/user';
-  
-  const router = useRouter();
-  const route = useRoute();
-  const store = userStore();
-  const username = ref('');
-  const error = ref('');
-  
-  const submitUsername = async () => {
-    try {
-      const email = route.query.email;
-      const response = await axios.post('/v1/create-user', {
-        username: username.value,
-        email: email,
-      });
-  
-      // Extract tokens from the response (assuming the backend sends them)
-      const { access_token, refresh_token } = response.data;
-  
-      // Store tokens and user information
-      store.setToken({
-        access: access_token,
-        refresh: refresh_token,
-        username: username.value,
-        email: email,
-      });
-  
-      // Redirect to the home page
-      router.push('/');
-    } catch (err) {
-      error.value = err.response ? err.response.data.error : 'An error occurred';
-    }
-  };
-  </script>
+import { ref } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import axios from 'axios';
+import { userStore } from '@/stores/user';
+
+const router = useRouter();
+const route = useRoute();
+const store = userStore();
+const username = ref('');
+const error = ref('');
+
+const submitUsername = async () => {
+  try {
+    const email = route.query.email;
+    const response = await axios.post('/v1/create-user', {
+      username: username.value,
+      email: email,
+    });
+
+    // Extract tokens and additional user data from the response
+    const { access_token, refresh_token, id, oauth_user } = response.data;
+
+    // Store tokens and user information
+    store.setToken({
+      access: access_token,
+      refresh: refresh_token,
+      id: id,
+      username: username.value,
+      email: email,
+      oauth_user: oauth_user,
+    });
+
+    // Redirect to the home page
+    router.push('/');
+  } catch (err) {
+    error.value = err.response ? err.response.data.error : 'An error occurred';
+  }
+};
+</script>
+
   
   <style scoped>
   .username-selection {

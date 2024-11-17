@@ -59,8 +59,9 @@ const login = async () => {
       id: response.data.id,
       username: response.data.username,
       email: response.data.email,
+      oauth_user: response.data.oauth_user,
     });
-    
+
     router.push('/');
   } catch (err) {
     error.value = err.response ? err.response.data.error : 'An error occurred';

@@ -14,13 +14,13 @@ const store = userStore();
 
 onMounted(() => {
   try {
-    // Extract user information from the redirected URL
     const query = router.currentRoute.value.query;
     const email = query.email;
     const username = query.username;
     const accessToken = query.access_token;
     const refreshToken = query.refresh_token;
     const id = query.id;
+    const oauthUser = query.oauth_user;
 
     // Handle success - save user info
     store.setToken({
@@ -29,6 +29,7 @@ onMounted(() => {
       id: id,
       username: username,
       email: email,
+      oauth_user: oauthUser,
     });
     
     router.push('/');

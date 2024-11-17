@@ -101,8 +101,20 @@ func AuthHandler(c *gin.Context) {
         }
     }
 
-    gothic.BeginAuthHandler(c.Writer, c.Request)
+    // Get the authentication URL
+    url, err := gothic.GetAuthURL(c.Writer, c.Request)
+    if err != nil {
+        log.Println("Error getting auth URL:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get auth URL"})
+        return
+    }
+
+    // Always prompt the user to choose an account
+    url += "&prompt=select_account"
+
+    http.Redirect(c.Writer, c.Request, url, http.StatusTemporaryRedirect)
 }
+
 
 
 

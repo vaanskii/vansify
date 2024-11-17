@@ -9,8 +9,7 @@ export const userStore = defineStore({
       id: null,
       username: null,
       email: null,
-      profile_picture: null,
-      gender: null,
+      oauth_user: null,
       access: null,
       refresh: null,
     },
@@ -20,14 +19,21 @@ export const userStore = defineStore({
       const access = localStorage.getItem("user.access");
       const refresh = localStorage.getItem("user.refresh");
       if (access && refresh) {
-        this.user.access = access;
-        this.user.refresh = refresh;
-        this.user.id = localStorage.getItem("id");
-        this.user.username = localStorage.getItem("username");
-        this.user.email = localStorage.getItem("email");
-        this.user.isAuthenticated = true;
-        axios.defaults.headers.common["Authorization"] = "Bearer " + this.user.access;
-        this.startRefreshTokenTimer();
+        const jwtToken = JSON.parse(atob(access.split(".")[1]));
+        const expires = new Date(jwtToken.exp * 1000);
+        if (expires < Date.now()) {
+          this.refreshToken();
+        } else {
+          this.user.access = access;
+          this.user.refresh = refresh;
+          this.user.id = localStorage.getItem("id");
+          this.user.username = localStorage.getItem("username");
+          this.user.email = localStorage.getItem("email");
+          this.user.oauth_user = localStorage.getItem("oauth_user");
+          this.user.isAuthenticated = true;
+          axios.defaults.headers.common["Authorization"] = "Bearer " + this.user.access;
+          this.startRefreshTokenTimer();
+        }
       }
     },
     setToken(data) {
@@ -36,14 +42,14 @@ export const userStore = defineStore({
       this.user.id = data.id;
       this.user.username = data.username;
       this.user.email = data.email;
-      this.user.profile_picture = data.profile_picture;
-      this.user.gender = data.gender;
+      this.user.oauth_user = data.oauth_user;
       this.user.isAuthenticated = true;
       localStorage.setItem("user.access", data.access);
       localStorage.setItem("user.refresh", data.refresh);
       localStorage.setItem("id", data.id);
       localStorage.setItem("username", data.username);
       localStorage.setItem("email", data.email);
+      localStorage.setItem("oauth_user", data.oauth_user);
       this.startRefreshTokenTimer();
     },
     removeToken() {
@@ -53,8 +59,7 @@ export const userStore = defineStore({
       this.user.id = null;
       this.user.username = null;
       this.user.email = null;
-      this.user.profile_picture = null;
-      this.user.gender = null;
+      this.user.oauth_user = null;
       localStorage.clear();
       this.stopRefreshTokenTimer();
     },
@@ -65,11 +70,12 @@ export const userStore = defineStore({
         });
         this.user.access = response.data.access_token;
         localStorage.setItem("user.access", response.data.access_token);
-        axios.defaults.headers.common["Authorization"] = "Bearer " + response.data.access_token;
+        axios.defaults.headers.common["Authorization"] = " Bearer " + response.data.access_token;
         this.startRefreshTokenTimer();
       } catch (error) {
         console.log("Refresh token failed:", error);
         this.removeToken();
+        router.push("/login");
       }
     },
     startRefreshTokenTimer() {
