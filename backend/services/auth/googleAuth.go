@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"encoding/gob"
 	"fmt"
 	"log"
 	"math/big"
@@ -10,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/sessions"
@@ -36,8 +38,11 @@ type UserRequest struct {
 
 type ContextKey string
 
+func init() {
+    gob.Register(time.Time{})
+}
+
 func InitGoogleAuth() {
-    // Load environment variables
     err := godotenv.Load()
     if err != nil {
         log.Fatalf("Error loading .env file: %v", err)
@@ -46,6 +51,11 @@ func InitGoogleAuth() {
     googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
     googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
     backendUrl := os.Getenv("BACKEND_URL")
+
+    if googleClientID == "" || googleClientSecret == "" || backendUrl == "" {
+        log.Fatal("Critical environment variables are missing")
+    }
+
     googleScopes := []string{
         "openid",                        
         "profile",                       
@@ -75,36 +85,35 @@ func InitGoogleAuth() {
     log.Println("Google provider initialized with scopes and offline access.")
 }
 
-
-
 func AuthHandler(c *gin.Context) {
     provider := c.Param("provider")
+    allowedProviders := map[string]bool{
+        "google": true,
+    }
+
     log.Println("AuthHandler triggered with provider:", provider)
-    if provider == "" {
-        c.String(http.StatusBadRequest, "You must select a provider")
-        log.Println("Error: No provider specified.")
+    if !allowedProviders[provider] {
+        c.String(http.StatusBadRequest, "You must select a valid provider")
+        log.Println("Error: Invalid provider specified.")
         return
     }
 
-    // Set provider as query parameter for Gothic
     c.Request.URL.RawQuery = "provider=" + provider
-
-    // Attempt to start the authentication session
     session, err := gothic.Store.Get(c.Request, "gothic-session")
     if err != nil {
         log.Println("Error creating session in AuthHandler:", err)
-    } else {
-        // Set provider in session
-        session.Values["provider"] = provider
-        err = session.Save(c.Request, c.Writer)
-        if err != nil {
-            log.Println("Error saving session in AuthHandler:", err)
-        } else {
-            log.Println("Session created in AuthHandler, session ID:", session.ID)
-        }
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
+        return
     }
 
-    // Get the authentication URL
+    session.Values["provider"] = provider
+    if err := session.Save(c.Request, c.Writer); err != nil {
+        log.Println("Error saving session in AuthHandler:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save session"})
+        return
+    }
+    log.Println("Session created in AuthHandler, session ID:", session.ID)
+
     url, err := gothic.GetAuthURL(c.Writer, c.Request)
     if err != nil {
         log.Println("Error getting auth URL:", err)
@@ -112,14 +121,9 @@ func AuthHandler(c *gin.Context) {
         return
     }
 
-    // Always prompt the user to choose an account
     url += "&prompt=select_account"
-
     http.Redirect(c.Writer, c.Request, url, http.StatusTemporaryRedirect)
 }
-
-
-
 
 func AuthCallback(c *gin.Context) {
     provider := c.Param("provider")
