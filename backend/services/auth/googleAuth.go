@@ -7,7 +7,9 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"net/url"
 	"os"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/sessions"
@@ -43,6 +45,7 @@ func InitGoogleAuth() {
 
     googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
     googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
+    backendUrl := os.Getenv("BACKEND_URL")
     googleScopes := []string{
         "openid",                        
         "profile",                       
@@ -65,7 +68,7 @@ func InitGoogleAuth() {
     log.Println("Using Scopes:", googleScopes)
 
     // Initialize Google provider with updated scopes and access type
-    googleProvider := google.New(googleClientID, googleClientSecret, "http://localhost:8080/v1/auth/google/callback", googleScopes...)
+    googleProvider := google.New(googleClientID, googleClientSecret, backendUrl+"/v1/auth/google/callback", googleScopes...)
     googleProvider.SetAccessType("offline")
     goth.UseProviders(googleProvider)
 
@@ -165,11 +168,22 @@ func AuthCallback(c *gin.Context) {
             return
         }
 
-        c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:5173/auth/google/callback?email=%s&username=%s&access_token=%s&refresh_token=%s&id=%d&oauth_user=%t", existingUser.Email, existingUser.Username, accessToken, refreshToken, existingUser.ID, existingUser.OauthUser))
-        return
+        frontendUrl := os.Getenv("FRONTEND_URL")
+
+        redirectURL := frontendUrl + "/auth/google/callback?email=" + url.QueryEscape(existingUser.Email) +
+            "&username=" + url.QueryEscape(existingUser.Username) +
+            "&access_token=" + url.QueryEscape(accessToken) +
+            "&refresh_token=" + url.QueryEscape(refreshToken) +
+            "&id=" + strconv.FormatInt(existingUser.ID, 10) +
+            "&oauth_user=" + strconv.FormatBool(existingUser.OauthUser)
+
+        c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+
     }
 
-    c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("http://localhost:5173/choose-username?email=%s", user.Email))
+    frontendUrl := os.Getenv("FRONTEND_URL")
+    redirectURL := frontendUrl + "/choose-username?email=" + url.QueryEscape(user.Email)
+    c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
 
