@@ -69,7 +69,7 @@ const login = async () => {
 
 const loginWithGoogle = () => {
   const apiUrl = import.meta.env.VITE_API_URL;
-  window.location.href = `/api/v1/auth/google`;
+  window.location.href = `${apiUrl}/v1/auth/google`;
 };
 
 </script>
