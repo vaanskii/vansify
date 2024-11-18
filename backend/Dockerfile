@@ -54,6 +54,8 @@ ARG SMTP_USER
 ARG SMTP_PASS
 ARG GOOGLE_CLIENT_ID
 ARG GOOGLE_CLIENT_SECRET
+ARG BACKEND_URL
+ARG FRONTEND_URL
 
 # Set environment variables using the ARG values
 ENV DB_USER=${DB_USER}
@@ -68,6 +70,8 @@ ENV SMTP_USER=${SMTP_USER}
 ENV SMTP_PASS=${SMTP_PASS}
 ENV GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
 ENV GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+ENV BACKEND_URL=${BACKEND_URL}
+ENV FRONTEND_URL=${FRONTEND_URL}
 
 # Command to run migrations and start the application
 CMD sh -c "echo 'y' | migrate -path /root/migrations -database 'mysql://${DB_USER}:${DB_PASS}@tcp(${DB_HOST}:${DB_PORT})/${DB_NAME}?parseTime=true' down && migrate -path /root/migrations -database 'mysql://${DB_USER}:${DB_PASS}@tcp(${DB_HOST}:${DB_PORT})/${DB_NAME}?parseTime=true' up && ./main"

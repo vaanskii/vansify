@@ -1,7 +1,6 @@
 <template>
   <div>
     <form @submit.prevent="login">
-      <!-- Existing login form fields -->
       <div>
         <label for="username">Username:</label>
         <input type="text" v-model="username" id="username" required>
@@ -69,7 +68,8 @@ const login = async () => {
 };
 
 const loginWithGoogle = () => {
-  window.location.href = '/api/v1/auth/google';
+  const apiUrl = import.meta.env.VITE_API_URL;
+  window.location.href = `/api/v1/auth/google`;
 };
 
 </script>

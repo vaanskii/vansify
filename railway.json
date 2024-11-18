@@ -13,7 +13,9 @@
       "SMTP_USER": "${{ SMTP_USER }}",
       "SMTP_PASS": "${{ SMTP_PASS }}",
       "GOOGLE_CLIENT_ID": "${{ GOOGLE_CLIENT_ID }}",
-      "GOOGLE_CLIENT_SECRET": "${{ GOOGLE_CLIENT_SECRET }}"
+      "GOOGLE_CLIENT_SECRET": "${{ GOOGLE_CLIENT_SECRET }}",
+      "BACKEND_URL": "${{ BACKEND_URL }}",
+      "FRONTEND_URL": "${{ FRONTEND_URL }}"
     }
   }
 }

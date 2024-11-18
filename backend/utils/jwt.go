@@ -21,11 +21,7 @@ var jwtSecret []byte
 
 // LoadEnv loads environment variables from the .env file
 func LoadEnv() error {
-	err := godotenv.Load()
-	if err != nil {
-		return fmt.Errorf("error loading .env file: %w", err)
-	}
-
+	godotenv.Load()
 	// Get the JWT Secret from .env
 	jwtSecret = []byte(os.Getenv("JWT_SECRET"))
 	return nil

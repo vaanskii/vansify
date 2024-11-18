@@ -26,10 +26,31 @@ func main() {
 
     r := gin.Default()
 
-    // Enable global handling of Method Not Allowed
+    // trustedProxies := []string{"10.0.0.0/16", "192.168.0.0/16"}
+    // if err := r.SetTrustedProxies(trustedProxies); err != nil {
+    //     panic(err)
+    // }
+
+    r.Use(func(c *gin.Context){
+        c.Writer.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' https://trusted.cdn.com; style-src 'self' https://trusted.cdn.com; img-src 'self' data: https://trusted.cdn.com; connect-src 'self' https://api.trusted.com")
+        c.Next()
+    })
+
+    r.GET("/set-cookie", func(c *gin.Context) {
+        cookie := http.Cookie{
+            Name:       "token",
+            Value:      "your_encrypted_token",
+            HttpOnly:   true,
+            Secure:     true,
+            SameSite:   http.SameSiteStrictMode,
+            Expires:    time.Now().Add(24 * time.Hour),
+        }
+        http.SetCookie(c.Writer, &cookie)
+        c.JSON(http.StatusOK, gin.H{"message": "Cookie is set"})
+    })
+
     r.HandleMethodNotAllowed = true
 
-    // Handle non-existent and incorrect methods routes
     r.NoRoute(func(c *gin.Context) {
         c.JSON(http.StatusNotFound, gin.H{"error": "Page Not Found"})
     })
@@ -38,7 +59,8 @@ func main() {
     })
 
     r.Use(cors.New(cors.Config{
-        AllowOrigins:     []string{"http://localhost:5173"},
+        // AllowOrigins:     []string{"http://localhost:5173"},
+        AllowAllOrigins:  true,
         AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
         AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
         ExposeHeaders:    []string{"Content-Length"},
@@ -108,7 +130,6 @@ func main() {
         })
     })
 
-    // Use the PORT environment variable if available, otherwise default to 8080
     port := os.Getenv("PORT")
     if port == "" {
         port = "8080"

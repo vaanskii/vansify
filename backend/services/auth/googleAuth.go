@@ -43,11 +43,8 @@ func init() {
 }
 
 func InitGoogleAuth() {
-    err := godotenv.Load()
-    if err != nil {
-        log.Fatalf("Error loading .env file: %v", err)
-    }
-
+    godotenv.Load()
+    
     googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
     googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
     backendUrl := os.Getenv("BACKEND_URL")
