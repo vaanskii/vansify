@@ -3,6 +3,7 @@ CREATE TABLE messages (
     chat_id VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
     username VARCHAR(255) NOT NULL,
+    file_url VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (chat_id) REFERENCES chats(chat_id) ON DELETE CASCADE
 );

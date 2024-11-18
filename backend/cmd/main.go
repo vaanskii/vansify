@@ -83,13 +83,10 @@ func main() {
         //google auth && google drive
         v1.GET("/auth/:provider", auth.AuthHandler) 
         v1.GET("/auth/:provider/callback", auth.AuthCallback)
-        v1.POST("/upload", auth.UploadFile)
-        v1.GET("/init/google-drive", func(c *gin.Context) {
-            auth.InitGoogleDrive()
-            c.JSON(http.StatusOK, gin.H{"message": "Google Drive Initialized"})
-        })
+        v1.POST("/upload/chat/:chatid", auth.UploadFile)
+        v1.POST("/upload/profile/:username", auth.UploadFile)
         v1.POST("/create-user", auth.CreateUserWithUsername)
-
+        v1.GET("/file/:fileID", auth.ServeFile)
 
         // refresh token
         v1.POST("/refresh-token", utils.RefreshToken)

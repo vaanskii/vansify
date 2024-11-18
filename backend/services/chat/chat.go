@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -16,7 +17,9 @@ import (
 	"github.com/vaanskii/vansify/db"
 	"github.com/vaanskii/vansify/models"
 	notifications "github.com/vaanskii/vansify/notifications"
+	"github.com/vaanskii/vansify/services/auth"
 	"github.com/vaanskii/vansify/utils"
+	"google.golang.org/api/drive/v3"
 )
 
 var (
@@ -154,6 +157,58 @@ func ChatWsHandler(c *gin.Context) {
         incomingMessage.ChatID = chatID
         incomingMessage.Username = claims.Username
 
+        if incomingMessage.Message == "FILE_UPLOAD" {
+            // Determine the folder name based on chat ID
+            folderName := "chat/" + chatID
+            log.Printf("Ensuring folder exists: %s", folderName)
+            parentFolderID, err := auth.EnsureFolderExists(folderName)
+            if err != nil {
+                log.Fatalf("Failed to ensure folder exists: %v", err)
+            }
+            log.Printf("Parent folder ID: %s", parentFolderID)
+
+            // Handle file upload
+            file, header, err := c.Request.FormFile("file")
+            if err != nil {
+                log.Println("Unable to get file:", err)
+                c.String(http.StatusBadRequest, fmt.Sprintf("Unable to get file: %v", err))
+                continue
+            }
+            defer file.Close()
+
+            // Upload the file to Google Drive
+            log.Printf("Uploading file to Google Drive in folder: %s", folderName)
+            driveFile, err := auth.DriveService.Files.Create(&drive.File{
+                Name:    header.Filename,
+                Parents: []string{parentFolderID},
+            }).Media(file).Do()
+            if err != nil {
+                log.Println("Unable to upload file to Drive:", err)
+                c.String(http.StatusInternalServerError, fmt.Sprintf("Unable to upload file to Drive: %v", err))
+                continue
+            }
+
+            // Make the file publicly accessible
+            log.Printf("Setting permissions for file ID: %s", driveFile.Id)
+            _, err = auth.DriveService.Permissions.Create(driveFile.Id, &drive.Permission{
+                Type: "anyone",
+                Role: "reader",
+            }).Do()
+            if err != nil {
+                log.Println("Unable to set file permissions:", err)
+                c.String(http.StatusInternalServerError, fmt.Sprintf("Unable to set file permissions: %v", err))
+                continue
+            }
+
+            // Generate the URL pointing to your backend endpoint
+            backendUrl := os.Getenv("BACKEND_URL")
+            fileURL := fmt.Sprintf("%s/v1/file/%s", backendUrl, driveFile.Id)
+            incomingMessage.Message = "FILE_UPLOAD_SUCCESS"
+            incomingMessage.FileURL = fileURL
+
+            log.Printf("File uploaded successfully: %s (ID: %s, URL: %s)", header.Filename, driveFile.Id, fileURL)
+        }
+
         // Fetch the profile picture URL for the user
         var profilePicture string
         err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", incomingMessage.Username).Scan(&profilePicture)
@@ -163,10 +218,10 @@ func ChatWsHandler(c *gin.Context) {
         }
 
         // Save message to database
-        result, execErr := db.DB.Exec("INSERT INTO messages (chat_id, message, username) VALUES (?, ?, ?)", incomingMessage.ChatID, incomingMessage.Message, incomingMessage.Username)
+        result, execErr := db.DB.Exec("INSERT INTO messages (chat_id, message, username, file_url) VALUES (?, ?, ?, ?)",
+            incomingMessage.ChatID, incomingMessage.Message, incomingMessage.Username, incomingMessage.FileURL)
         if execErr != nil {
             log.Println("DB Exec error:", execErr)
-            continue
         }
 
         messageID, err := result.LastInsertId()
@@ -177,7 +232,6 @@ func ChatWsHandler(c *gin.Context) {
         incomingMessage.ID = int(messageID)
         fmt.Printf("Message ID: %d\n", incomingMessage.ID)
 
-        // Create a message structure that includes the profile picture and real ID
         fullMessage := struct {
             models.Message
             ProfilePicture string `json:"profile_picture"`
@@ -190,10 +244,8 @@ func ChatWsHandler(c *gin.Context) {
         broadcastMessage, _ := json.Marshal(fullMessage)
         conn.WriteMessage(messageType, broadcastMessage)
 
-        // Broadcast the message to all connected clients except the sender
         hub.BroadcastMessage(conn, messageType, broadcastMessage)
 
-        // Determine recipient and notify
         var recipientUsername string
         if claims.Username == chat.User1 {
             recipientUsername = chat.User2
@@ -217,26 +269,26 @@ func ChatWsHandler(c *gin.Context) {
             notifications.NotifyNewMessage(int64(recipientID), incomingMessage)
             log.Printf("Notification sent to user ID: %d for message: %s", recipientID, incomingMessage.Message)
 
-            // Get unread count for this specific chat
             chatUnreadCount, err := notifications.GetUnreadChatMessagesCount(int64(recipientID), chatID)
             if err != nil {
                 log.Printf("Error getting unread message count for chat: %v", err)
             } else {
                 totalUnreadCount, err := notifications.GetTotalUnreadMessageCount(int64(recipientID))
-                if err != nil { log.Printf("Error getting total unread message count: %v", err) 
-            } else {
+                if err != nil {
+                    log.Printf("Error getting total unread message count: %v", err)
+                } else {
                     // Broadcast the chat-specific unread count notification
                     chatNotificationMessage, _ := json.Marshal(map[string]interface{}{
-                        "user_id":           recipientID,
-                        "chat_id":           chatID,
-                        "unread_count":      chatUnreadCount,
+                        "user_id":            recipientID,
+                        "chat_id":            chatID,
+                        "unread_count":       chatUnreadCount,
                         "total_unread_count": totalUnreadCount,
-                        "message":           incomingMessage.Message,
-                        "user":              claims.Username,
-                        "profile_picture":   profilePicture,
-                        "sender":            claims.Username,
-                        "last_message_time": time.Now().Format(time.RFC3339),
-                        "last_message":      lastMessage,
+                        "message":            incomingMessage.Message,
+                        "user":               claims.Username,
+                        "profile_picture":    profilePicture,
+                        "sender":             claims.Username,
+                        "last_message_time":  time.Now().Format(time.RFC3339),
+                        "last_message":       lastMessage,
                     })
                     notifications.GlobalNotificationHub.BroadcastNotification(chatNotificationMessage)
                 }
@@ -269,7 +321,7 @@ func GetChatHistory(c *gin.Context) {
     log.Printf("Profile Picture for %s: %s", chattingUser, profilePicture)
 
     // Fetch messages for the chat
-    rows, err := db.DB.Query("SELECT id, chat_id, message, username, created_at FROM messages WHERE chat_id = ?", chatID)
+    rows, err := db.DB.Query("SELECT id, chat_id, message, username, file_url, created_at FROM messages WHERE chat_id = ?", chatID)
     if err != nil {
         log.Println("Error fetching chat history:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching chat history"})
@@ -281,7 +333,7 @@ func GetChatHistory(c *gin.Context) {
     for rows.Next() {
         var message models.Message
         var createdAt time.Time
-        if err := rows.Scan(&message.ID, &message.ChatID, &message.Message, &message.Username, &createdAt); err != nil {
+        if err := rows.Scan(&message.ID, &message.ChatID, &message.Message, &message.Username, &message.FileURL, &createdAt); err != nil {
             log.Println("Error scanning message:", err)
             c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning message"})
             return
@@ -293,7 +345,8 @@ func GetChatHistory(c *gin.Context) {
             "message":         message.Message,
             "username":        message.Username,
             "created_at":      formattedTime,
-            "profile_picture": profilePicture,
+            "profile_picture":  profilePicture,
+            "file_url":         message.FileURL,
         })
     }
     log.Println("Fetched Messages:", messages)
