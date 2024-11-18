@@ -73,13 +73,11 @@ const followers = ref([]);
 const followings = ref([]);
 
 function resolveProfilePicture(profilePicture) {
-  // Remove leading slash if it exists
   if (profilePicture.startsWith('/')) {
     profilePicture = profilePicture.substring(1);
   }
   return profilePicture.startsWith('http') ? profilePicture : `${profilePicture}`;
 }
-
 
 // Fetch followers for current or other user
 const fetchFollowers = async (username) => {
@@ -148,10 +146,11 @@ const updateFollowCount = (increment) => {
 onMounted(async () => {
   if (!isAuthenticated.value) return;
   const username = route.params.username;
-  const loggedInUsername = localStorage.getItem('username');
+  const userData = JSON.parse(localStorage.getItem('user_data'));
+  const loggedInUsername = userData.username;
+
   isCurrentUser.value = username === loggedInUsername;
   try {
-    // Fetch user details
     const response = await axios.get(`/v1/user/${username}`, {
       headers: {
         Authorization: `Bearer ${store.user.access}`,
@@ -176,15 +175,23 @@ onMounted(async () => {
 watch(route, async (newRoute) => {
   if (isAuthenticated.value) {
     const username = newRoute.params.username;
-    const loggedInUsername = localStorage.getItem('username');
+    const userData = JSON.parse(localStorage.getItem('user_data'));
+    const loggedInUsername = userData.username;
+
     isCurrentUser.value = username === loggedInUsername;
     try {
-      // Fetch user details
-      const response = await axios.get(`/v1/user/${username}`);
+      const response = await axios.get(`/v1/user/${username}`, {
+        headers: {
+          Authorization: `Bearer ${store.user.access}`,
+        },
+      });
       user.value = response.data;
       user.value.profile_picture = `/${user.value.profile_picture}`;
-      // Check follow status
-      const followStatusResponse = await axios.get(`/v1/is-following/${loggedInUsername}/${username}`);
+      const followStatusResponse = await axios.get(`/v1/is-following/${loggedInUsername}/${username}`, {
+        headers: {
+          Authorization: `Bearer ${store.user.access}`,
+        },
+      });
       isFollowing.value = followStatusResponse.data.is_following;
       await fetchFollowers(username);
       await fetchFollowings(username);
@@ -202,10 +209,18 @@ const goToProfile = (username) => {
 const toggleFollow = async () => {
   try {
     if (isFollowing.value) {
-      await axios.delete(`/v1/unfollow/${user.value.username}`);
+      await axios.delete(`/v1/unfollow/${user.value.username}`, {
+        headers: {
+          Authorization: `Bearer ${store.user.access}`,
+        },
+      });
       updateFollowCount(false);
     } else {
-      await axios.post(`/v1/follow/${user.value.username}`);
+      await axios.post(`/v1/follow/${user.value.username}`, {}, {
+        headers: {
+          Authorization: `Bearer ${store.user.access}`,
+        },
+      });
       updateFollowCount(true);
     }
     isFollowing.value = !isFollowing.value;
@@ -216,14 +231,22 @@ const toggleFollow = async () => {
 
 const handleChat = async () => {
   try {
+    const userData = JSON.parse(localStorage.getItem('user_data'));
+
     // Check if chat exists
-    const chatExistsResponse = await axios.get(`/v1/check-chat/${store.user.username}/${user.value.username}`);
-    // If chat exists, redirect to chat
+    const chatExistsResponse = await axios.get(`/v1/check-chat/${userData.username}/${user.value.username}`, {
+      headers: {
+        Authorization: `Bearer ${store.user.access}`,
+      },
+    });
     if (chatExistsResponse.data.chat_id) {
       router.push({ path: `/inbox/${chatExistsResponse.data.chat_id}`, query: { user: user.value.username } });
     } else {
-      // If chat does not exist, create a new chat
-      const createChatResponse = await axios.post('/v1/create-chat', { user2: user.value.username });
+      const createChatResponse = await axios.post('/v1/create-chat', { user2: user.value.username }, {
+        headers: {
+          Authorization: `Bearer ${store.user.access}`,
+        },
+      });
       const chatID = createChatResponse.data.chat_id;
       router.push({ path: `/inbox/${chatID}`, query: { user: user.value.username } });
     }
