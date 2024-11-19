@@ -1,15 +1,16 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"image"
 	"image/jpeg"
-	"io"
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -246,14 +247,29 @@ func EnsureFolderExists(folderName string) (string, error) {
     return folder.Id, nil
 }
 
+var cache = make(map[string][]byte)
+var cacheLock sync.RWMutex
+
 func ServeFile(c *gin.Context) {
     fileID := c.Param("fileID")
+
+    // Check cache first
+    cacheLock.RLock()
+    if data, found := cache[fileID]; found {
+        cacheLock.RUnlock()
+        c.Header("Content-Type", "image/jpeg") 
+        c.Header("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileID))
+        c.Writer.Write(data)
+        return
+    }
+    cacheLock.RUnlock()
+
     file, err := DriveService.Files.Get(fileID).Fields("mimeType, name").Do()
     if err != nil {
         c.String(http.StatusInternalServerError, fmt.Sprintf("Unable to retrieve file metadata: %v", err))
         return
     }
-    
+
     response, err := DriveService.Files.Get(fileID).Download()
     if err != nil {
         c.String(http.StatusInternalServerError, fmt.Sprintf("Unable to download file: %v", err))
@@ -261,16 +277,20 @@ func ServeFile(c *gin.Context) {
     }
     defer response.Body.Close()
 
+    buf := new(bytes.Buffer)
+    buf.ReadFrom(response.Body)
+    data := buf.Bytes()
+
+    // Update cache
+    cacheLock.Lock()
+    cache[fileID] = data
+    cacheLock.Unlock()
+
     c.Header("Content-Type", file.MimeType)
     c.Header("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", file.Name))
-    
-    // Stream the file content to the client
-    _, err = io.Copy(c.Writer, response.Body)
-    if err != nil {
-        c.String(http.StatusInternalServerError, fmt.Sprintf("Unable to write file to response: %v", err))
-        return
-    }
+    c.Writer.Write(data)
 }
+
 
 // Function to delete the chat folder and its contents from Google Drive
 func DeleteChatAndImages(chatID, userEmail string) error {
