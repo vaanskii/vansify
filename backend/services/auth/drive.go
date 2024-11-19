@@ -296,3 +296,17 @@ func DeleteChatAndImages(chatID, userEmail string) error {
 
     return nil
 }
+
+func FolderExists(folderName string) (bool, error) {
+    q := fmt.Sprintf("name='%s' and mimeType='application/vnd.google-apps.folder'", folderName)
+    fileList, err := DriveService.Files.List().Q(q).Fields("files(id)").Do()
+    if err != nil {
+        return false, fmt.Errorf("unable to query existing folders: %v", err)
+    }
+    if len(fileList.Files) > 0 {
+        log.Printf("Folder exists: %s (ID: %s)", folderName, fileList.Files[0].Id)
+        return true, nil
+    }
+    log.Printf("Folder does not exist: %s", folderName)
+    return false, nil
+}

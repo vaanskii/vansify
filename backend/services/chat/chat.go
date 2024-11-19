@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -320,8 +321,23 @@ func GetChatHistory(c *gin.Context) {
     }
     log.Printf("Profile Picture for %s: %s", chattingUser, profilePicture)
 
-    // Fetch messages for the chat
-    rows, err := db.DB.Query("SELECT id, chat_id, message, username, file_url, created_at FROM messages WHERE chat_id = ?", chatID)
+    // Get limit and offset from query parameters
+    limit, err := strconv.Atoi(c.DefaultQuery("limit", "20"))
+    if err != nil || limit <= 0 {
+        log.Println("Invalid limit specified")
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit specified"})
+        return
+    }
+
+    offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
+    if err != nil || offset < 0 {
+        log.Println("Invalid offset specified")
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid offset specified"})
+        return
+    }
+
+    // Fetch messages for the chat with pagination
+    rows, err := db.DB.Query("SELECT id, chat_id, message, username, file_url, created_at FROM messages WHERE chat_id = ? LIMIT ? OFFSET ?", chatID, limit, offset)
     if err != nil {
         log.Println("Error fetching chat history:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching chat history"})
@@ -345,8 +361,8 @@ func GetChatHistory(c *gin.Context) {
             "message":         message.Message,
             "username":        message.Username,
             "created_at":      formattedTime,
-            "profile_picture":  profilePicture,
-            "file_url":         message.FileURL,
+            "profile_picture": profilePicture,
+            "file_url":        message.FileURL,
         })
     }
     log.Println("Fetched Messages:", messages)
@@ -395,7 +411,7 @@ func DeleteChat(c *gin.Context) {
 
     // Ensure the user is part of the chat to delete it
     err := db.DB.QueryRow("SELECT COUNT(*) FROM chats WHERE chat_id = ? AND (user1 = ? OR user2 = ?)", chatID, username, username).Scan(&chatUserCount)
-    if (err != nil || chatUserCount == 0) {
+    if err != nil || chatUserCount == 0 {
         log.Printf("Chat not found or user is not part of the chat. Error: %v", err)
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
         return
@@ -403,17 +419,26 @@ func DeleteChat(c *gin.Context) {
 
     // Delete the chat from the database
     _, err = db.DB.Exec("DELETE FROM chats WHERE chat_id = ?", chatID)
-    if (err != nil) {
+    if err != nil {
         log.Printf("Error deleting chat: %v", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting chat"})
         return
     }
 
-    // Delete the chat folder and its contents from Google Drive
-    err = auth.DeleteChatAndImages(chatID, userEmail)
-    if (err != nil) {
-        log.Printf("Error deleting chat images from Google Drive: %v", err)
-        c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error deleting chat images from Google Drive: %v", err)})
+    folderExists, err := auth.FolderExists("chat/" + chatID)
+    if err != nil {
+        log.Printf("Error checking chat folder existence in Google Drive: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error checking chat folder existence in Google Drive: %v", err)})
+        return
+    }
+
+    if folderExists {
+        err = auth.DeleteChatAndImages(chatID, userEmail)
+        if err != nil {
+            log.Printf("Error deleting chat images from Google Drive: %v", err)
+            c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error deleting chat images from Google Drive: %v", err)})
+            return
+        }
     }
 
     // Broadcast the chat deletion to connected clients
@@ -427,6 +452,7 @@ func DeleteChat(c *gin.Context) {
 
     c.JSON(http.StatusOK, gin.H{"message": "Chat deleted successfully"})
 }
+
 
 func DeleteMessage(c *gin.Context) {
     claims, exists := c.Get("claims")
