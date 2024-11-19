@@ -372,28 +372,30 @@ func CheckChatExists(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"chat_id": chatID})
 }
 
+// Function to delete the chat from the application and Google Drive
 func DeleteChat(c *gin.Context) {
     chatID := c.Param("chatID")
 
     claims, exists := c.Get("claims")
-    if !exists {
+    if (!exists) {
         log.Println("No claims found")
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
         return
     }
 
     customClaims, ok := claims.(*utils.CustomClaims)
-    if !ok {
+    if (!ok) {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
         return
     }
 
     username := customClaims.Username
+    userEmail := customClaims.Email
     var chatUserCount int
 
     // Ensure the user is part of the chat to delete it
     err := db.DB.QueryRow("SELECT COUNT(*) FROM chats WHERE chat_id = ? AND (user1 = ? OR user2 = ?)", chatID, username, username).Scan(&chatUserCount)
-    if err != nil || chatUserCount == 0 {
+    if (err != nil || chatUserCount == 0) {
         log.Printf("Chat not found or user is not part of the chat. Error: %v", err)
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
         return
@@ -401,12 +403,20 @@ func DeleteChat(c *gin.Context) {
 
     // Delete the chat from the database
     _, err = db.DB.Exec("DELETE FROM chats WHERE chat_id = ?", chatID)
-    if err != nil {
+    if (err != nil) {
         log.Printf("Error deleting chat: %v", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting chat"})
         return
     }
 
+    // Delete the chat folder and its contents from Google Drive
+    err = auth.DeleteChatAndImages(chatID, userEmail)
+    if (err != nil) {
+        log.Printf("Error deleting chat images from Google Drive: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error deleting chat images from Google Drive: %v", err)})
+    }
+
+    // Broadcast the chat deletion to connected clients
     deleteChat := map[string]interface{}{
         "type":    "CHAT_DELETED",
         "chat_id": chatID,

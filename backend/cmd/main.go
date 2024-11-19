@@ -87,7 +87,7 @@ func main() {
         v1.POST("/upload/profile/:username", auth.UploadFile)
         v1.POST("/create-user", auth.CreateUserWithUsername)
         v1.GET("/file/:fileID", auth.ServeFile)
-
+        
         // refresh token
         v1.POST("/refresh-token", utils.RefreshToken)
 

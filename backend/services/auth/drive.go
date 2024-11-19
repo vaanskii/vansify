@@ -158,16 +158,18 @@ func UploadFile(c *gin.Context) {
     }
     log.Printf("File uploaded successfully: %s (ID: %s)", driveFile.Name, driveFile.Id)
 
+    // Set permissions for the file to your email
     log.Printf("Setting permissions for file ID: %s", driveFile.Id)
     _, err = DriveService.Permissions.Create(driveFile.Id, &drive.Permission{
-        Type: "anyone",
-        Role: "reader",
+        Type:        "user",
+        Role:        "writer",
+        EmailAddress: "giorgivanadze03@gmail.com",
     }).Do()
     if err != nil {
         c.String(http.StatusInternalServerError, fmt.Sprintf("Unable to set file permissions: %v", err))
         return
     }
-    log.Printf("File permissions set to public for ID: %s", driveFile.Id)
+    log.Printf("File permissions set for ID: %s", driveFile.Id)
 
     backendUrl := os.Getenv("BACKEND_URL")
     fileURL := fmt.Sprintf("%s/v1/file/%s", backendUrl, driveFile.Id)
@@ -179,6 +181,7 @@ func UploadFile(c *gin.Context) {
         "fileURL":  fileURL,
     })
 }
+
 
 func EnsureFolderExists(folderName string) (string, error) {
     q := fmt.Sprintf("name='%s' and mimeType='application/vnd.google-apps.folder'", folderName)
@@ -229,4 +232,67 @@ func ServeFile(c *gin.Context) {
         c.String(http.StatusInternalServerError, fmt.Sprintf("Unable to write file to response: %v", err))
         return
     }
+}
+
+// Function to delete the chat folder and its contents from Google Drive
+func DeleteChatAndImages(chatID, userEmail string) error {
+    folderName := "chat/" + chatID
+    log.Printf("Retrieving folder ID for: %s", folderName)
+
+    // List all folders with the specified name
+    fileList, err := DriveService.Files.List().Q(fmt.Sprintf("name = '%s' and mimeType = 'application/vnd.google-apps.folder'", folderName)).Fields("files(id)").Do()
+    if err != nil {
+        return fmt.Errorf("unable to list folders: %v", err)
+    }
+
+    if len(fileList.Files) == 0 {
+        return fmt.Errorf("folder not found for chatID: %s", chatID)
+    }
+    folderID := fileList.Files[0].Id
+
+    setPermissions := func(fileID string) error {
+        permissions := []*drive.Permission{
+            {
+                Type:        "user",
+                Role:        "writer",
+                EmailAddress: userEmail,
+            },
+        }
+        for _, permission := range permissions {
+            if _, err := DriveService.Permissions.Create(fileID, permission).Do(); err != nil {
+                return fmt.Errorf("unable to set permission for file ID: %s, error: %v", fileID, err)
+            }
+        }
+        return nil
+    }
+
+    // Set permissions for all files in the folder before deleting
+    for _, file := range fileList.Files {
+        if err := setPermissions(file.Id); err != nil {
+            log.Printf("Unable to set permissions for file ID: %s, error: %v", file.Id, err)
+        }
+    }
+
+    // List all files in the folder
+    filesList, err := DriveService.Files.List().Q(fmt.Sprintf("'%s' in parents", folderID)).Fields("files(id)").Do()
+    if err != nil {
+        return fmt.Errorf("unable to list files in folder: %v", err)
+    }
+
+    for _, file := range filesList.Files {
+        if err := DriveService.Files.Delete(file.Id).Do(); err != nil {
+            log.Printf("Unable to delete file ID: %s, error: %v", file.Id, err)
+        }
+    }
+
+    if err := setPermissions(folderID); err != nil {
+        log.Printf("Unable to set permissions for folder ID: %s, error: %v", folderID, err)
+    }
+
+    // Delete the folder itself
+    if err := DriveService.Files.Delete(folderID).Do(); err != nil {
+        return fmt.Errorf("unable to delete folder: %v", err)
+    }
+
+    return nil
 }

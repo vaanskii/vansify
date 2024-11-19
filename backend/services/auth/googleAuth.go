@@ -155,14 +155,14 @@ func AuthCallback(c *gin.Context) {
     if err == nil {
         log.Println("User already exists:", existingUser.Email)
         // Generate tokens for existing user
-        accessToken, err := utils.GenerateAccessToken(existingUser.Username)
+        accessToken, err := utils.GenerateAccessToken(existingUser.Username, existingUser.Email)
         if err != nil {
             log.Println("Error generating access token:", err)
             c.String(http.StatusInternalServerError, fmt.Sprintf("Error generating access token: %v", err))
             return
         }
 
-        refreshToken, err := utils.GenerateRefreshToken(existingUser.Username)
+        refreshToken, err := utils.GenerateRefreshToken(existingUser.Username, existingUser.Email)
         if err != nil {
             log.Println("Error generating refresh token:", err)
             c.String(http.StatusInternalServerError, fmt.Sprintf("Error generating refresh token: %v", err))
@@ -227,13 +227,13 @@ func CreateUserWithUsername(c *gin.Context) {
 
     userID, _ := result.LastInsertId()
 
-    accessToken, err := utils.GenerateAccessToken(newUser.Username)
+    accessToken, err := utils.GenerateAccessToken(newUser.Username, newUser.Email)
     if err != nil {
         c.String(http.StatusInternalServerError, fmt.Sprintf("Error generating access token: %v", err))
         return
     }
 
-    refreshToken, err := utils.GenerateRefreshToken(newUser.Username)
+    refreshToken, err := utils.GenerateRefreshToken(newUser.Username, newUser.Email)
     if err != nil {
         c.String(http.StatusInternalServerError, fmt.Sprintf("Error generating refresh token: %v", err))
         return

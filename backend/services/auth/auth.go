@@ -166,12 +166,12 @@ func LoginUser(c *gin.Context) {
         return
     }
     // Generate tokens
-    accessToken, err := utils.GenerateAccessToken(request.Username)
+    accessToken, err := utils.GenerateAccessToken(request.Username, dbUser.Email)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating access token"})
         return
     }
-    refreshToken, err := utils.GenerateRefreshToken(request.Username)
+    refreshToken, err := utils.GenerateRefreshToken(request.Username, dbUser.Email)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating refresh token"})
         return
