@@ -4,7 +4,14 @@
     <div v-if="formattedMessages.length === 0 && !isLoading" class="no-messages">No messages yet</div>
     <div v-if="!isLoading" class="messages-container" ref="messagesContainer">
       <div v-if="loadingOlderMessages" class="loader">Loading...</div>
-      <div v-for="message in formattedMessages" :key="message.id" :class="{'message': true, 'sent': message.isOwnMessage, 'received': !message.isOwnMessage}">
+      <div v-for="message in formattedMessages" :key="message.id" 
+           :class="{
+             'message': true, 
+             'sent': message.isOwnMessage && !message.file_url, 
+             'received': !message.isOwnMessage && !message.file_url, 
+             'sent-image': message.isOwnMessage && message.file_url, 
+             'received-image': !message.isOwnMessage && message.file_url
+           }">
         <div class="message-header" v-if="message.username && !message.isOwnMessage" @click="goToProfile(message.username)">
           <img :src="message.profile_picture" alt="Profile Picture" class="profile-picture" />
           <strong>{{ message.username }}</strong>
@@ -452,7 +459,7 @@ watch(messages, () => {
 .chat-container {
   display: flex;
   flex-direction: column;
-  max-width: 600px;
+  width: 800px;
   margin: 0 auto;
   padding: 20px;
   border: 1px solid #ccc;
@@ -497,13 +504,23 @@ watch(messages, () => {
   background-color: #daf8cb;
 }
 
-.uploaded-image{
-  width: 150px;
-}
-
 .received {
   align-self: flex-start;
   background-color: #e4e6eb;
+}
+
+.sent-image {
+  align-self: flex-end;
+  background-color: #daf8cb;
+}
+
+.received-image {
+  align-self: flex-start;
+  background-color: #e4e6eb;
+}
+
+.uploaded-image{
+  width: 150px;
 }
 
 .message-header {
