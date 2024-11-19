@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"io"
 	"log"
 	"net/http"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/lpernett/godotenv"
+	"github.com/nfnt/resize"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
@@ -114,9 +117,9 @@ func saveToken(path string, token *oauth2.Token) {
 }
 
 func UploadFile(c *gin.Context) {
-    envErr := godotenv.Load() 
-    if envErr != nil { 
-        log.Fatalf("Error loading .env file: %v", envErr) 
+    envErr := godotenv.Load()
+    if envErr != nil {
+        log.Fatalf("Error loading .env file: %v", envErr)
     }
 
     var folderName string
@@ -140,7 +143,6 @@ func UploadFile(c *gin.Context) {
         return
     }
 
-    // Get the file from the request
     file, header, err := c.Request.FormFile("file")
     if err != nil {
         c.String(http.StatusBadRequest, fmt.Sprintf("Unable to get file: %v", err))
@@ -148,10 +150,43 @@ func UploadFile(c *gin.Context) {
     }
     defer file.Close()
 
+    // Decode the image
+    img, _, err := image.Decode(file)
+    if err != nil {
+        c.String(http.StatusBadRequest, fmt.Sprintf("Unable to decode image: %v", err))
+        return
+    }
+
+    // Resize the image to a maximum width of 1024 pixels, preserving the aspect ratio
+    resizedImage := resize.Resize(800, 0, img, resize.Lanczos3)
+
+    // Create a temporary file to store the resized image
+    tempFile, err := os.CreateTemp("", "resized-*.jpg")
+    if err != nil {
+        c.String(http.StatusInternalServerError, fmt.Sprintf("Unable to create temporary file: %v", err))
+        return
+    }
+    defer tempFile.Close()
+
+    // Encode the resized image as a JPEG
+    err = jpeg.Encode(tempFile, resizedImage, nil)
+    if err != nil {
+        c.String(http.StatusInternalServerError, fmt.Sprintf("Unable to encode resized image: %v", err))
+        return
+    }
+
+    // Reopen the temporary file for uploading to Google Drive
+    tempFile, err = os.Open(tempFile.Name())
+    if err != nil {
+        c.String(http.StatusInternalServerError, fmt.Sprintf("Unable to open temporary file: %v", err))
+        return
+    }
+    defer tempFile.Close()
+
     driveFile, err := DriveService.Files.Create(&drive.File{
         Name:    header.Filename,
         Parents: []string{parentFolderID},
-    }).Media(file).Do()
+    }).Media(tempFile).Do()
     if err != nil {
         c.String(http.StatusInternalServerError, fmt.Sprintf("Unable to upload file to Drive: %v", err))
         return
@@ -173,12 +208,15 @@ func UploadFile(c *gin.Context) {
 
     backendUrl := os.Getenv("BACKEND_URL")
     fileURL := fmt.Sprintf("%s/v1/file/%s", backendUrl, driveFile.Id)
+    driveFileURL := fmt.Sprintf("https://drive.google.com/file/d/%s/view", driveFile.Id)
     log.Printf("Generated backend file URL: %s", fileURL)
+    log.Printf("Generated Google Drive file URL: %s", driveFileURL)
 
     c.JSON(http.StatusOK, gin.H{
         "fileID":   driveFile.Id,
         "fileName": driveFile.Name,
         "fileURL":  fileURL,
+        "driveFileURL":  driveFileURL,
     })
 }
 
