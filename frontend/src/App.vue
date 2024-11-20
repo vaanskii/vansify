@@ -13,6 +13,7 @@ import notify from '@/utils/notify';
 const store = userStore();
 const ws = ref(null);
 const apiUrl = import.meta.env.VITE_WS_URL;
+const wsConst = import.meta.env.VITE_WS;
 let reconnectAttempts = 0;
 const maxReconnectAttempts = 10;
 let initialConnection = true;
@@ -34,7 +35,7 @@ const reconnectWebSocket = () => {
 // Function to establish WebSocket connection
 const connectWebSocket = () => {
   if (store.user.isAuthenticated && !ws.value) {
-    const wsUrl = `ws://${apiUrl}/v1/notifications/ws?token=${encodeURIComponent(store.user.access)}`;
+    const wsUrl = `${wsConst}//${apiUrl}/v1/notifications/ws?token=${encodeURIComponent(store.user.access)}`;
     ws.value = new WebSocket(wsUrl);
 
     // Handle WebSocket events

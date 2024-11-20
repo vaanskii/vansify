@@ -69,6 +69,7 @@ const fileInput = ref(null);
 const selectedFile = ref(null);
 const loadingOlderMessages = ref(false);
 const hasMoreMessages = ref(true);
+const wsConst = import.meta.env.VITE_WS;
 
 const goToProfile = (username) => {
   router.push({ name: 'userprofile', params: { username }})
@@ -139,7 +140,7 @@ const deleteMessage = async (messageID) => {
 };
 
 const connectWebSocket = (chatID, token) => {
-  const wsURL = `ws://${apiUrl}/v1/chat/${chatID}/ws?token=${encodeURIComponent(token)}`;
+  const wsURL = `${wsConst}//${apiUrl}/v1/chat/${chatID}/ws?token=${encodeURIComponent(token)}`;
   ws = new WebSocket(wsURL);
 
   ws.onopen = () => {
