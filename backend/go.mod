@@ -3,6 +3,7 @@ module github.com/vaanskii/vansify
 go 1.23.1
 
 require (
+	github.com/aws/aws-sdk-go v1.55.5
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-sql-driver/mysql v1.8.1
@@ -13,6 +14,7 @@ require (
 	github.com/markbates/goth v1.80.0
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	golang.org/x/crypto v0.29.0
+	golang.org/x/image v0.22.0
 	golang.org/x/oauth2 v0.24.0
 	google.golang.org/api v0.205.0
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
@@ -41,9 +43,10 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.0 // indirect
-	github.com/gorilla/context v1.1.1 // indirect
+	github.com/gorilla/context v1.1.2 // indirect
 	github.com/gorilla/mux v1.6.2 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.8 // indirect
 	github.com/kr/text v0.2.0 // indirect

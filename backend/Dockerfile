@@ -56,6 +56,10 @@ ARG GOOGLE_CLIENT_ID
 ARG GOOGLE_CLIENT_SECRET
 ARG BACKEND_URL
 ARG FRONTEND_URL
+ARG AWS_REGION
+ARG AWS_ACCESS_KEY_ID
+ARG AWS_SECRET_ACCESS_KEY
+ARG AWS_BUCKET_NAME
 
 # Set environment variables using the ARG values
 ENV DB_USER=${DB_USER}
@@ -72,6 +76,11 @@ ENV GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
 ENV GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
 ENV BACKEND_URL=${BACKEND_URL}
 ENV FRONTEND_URL=${FRONTEND_URL}
+ENV AWS_REGION=${AWS_REGION}
+ENV AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+ENV AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+ENV AWS_BUCKET_NAME=${AWS_BUCKET_NAME}
+
 
 # Command to run migrations and start the application
 CMD sh -c "echo 'y' | migrate -path /root/migrations -database 'mysql://${DB_USER}:${DB_PASS}@tcp(${DB_HOST}:${DB_PORT})/${DB_NAME}?parseTime=true' down && migrate -path /root/migrations -database 'mysql://${DB_USER}:${DB_PASS}@tcp(${DB_HOST}:${DB_PORT})/${DB_NAME}?parseTime=true' up && ./main"
