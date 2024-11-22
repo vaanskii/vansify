@@ -5,5 +5,6 @@ CREATE TABLE messages (
     username VARCHAR(255) NOT NULL,
     file_url VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status ENUM('sent', 'delivered', 'read') DEFAULT 'sent',
     FOREIGN KEY (chat_id) REFERENCES chats(chat_id) ON DELETE CASCADE
 );

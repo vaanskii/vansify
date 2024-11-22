@@ -100,11 +100,22 @@ func MarkChatNotificationsAsRead(c *gin.Context) {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving user ID"})
         return
     }
+
+    // Update message statuses to "read"
+    _, err = db.DB.Exec("UPDATE messages SET status = 'read' WHERE chat_id = ? AND username != ?", chatID, customClaims.Username)
+    if err != nil {
+        log.Printf("Error updating message statuses to read: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error updating message statuses to read"})
+        return
+    }
+
+    // Delete notifications for the chat
     _, err = db.DB.Exec("DELETE FROM chat_notifications WHERE user_id = ? AND chat_id = ?", userID, chatID)
     if err != nil {
         log.Printf("Error deleting notifications for chat: %v\n", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting notifications for chat"})
         return
     }
-    c.JSON(http.StatusOK, gin.H{"message": "Notifications for chat deleted"})
+
+    c.JSON(http.StatusOK, gin.H{"message": "Messages marked as read and notifications deleted"})
 }

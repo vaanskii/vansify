@@ -26,8 +26,10 @@
         </div>
         <div class="message-footer">
           <span v-if="message.isOwnMessage">
-            <span v-if="message.status === true">(Sent)</span> 
-            <span v-if="message.status === false">(Sending...)</span>
+            <span v-if="message.status === 'sent'">(Sent)</span> 
+            <span v-if="message.status === 'delivered'">(Delivered)</span>
+            <span v-if="message.status === 'read'">(Read)</span>
+            <span v-if="message.status === 'sending'">(Sending...)</span>
           </span>
           <span>{{ formatTime(message.created_at) }}</span>
           <button v-if="message.isOwnMessage" @click="deleteMessage(message.id)" class="delete-button">Delete</button>
@@ -179,37 +181,38 @@ const connectWebSocket = (chatID, token) => {
   };
 
   ws.onmessage = (event) => {
-  const message = JSON.parse(event.data);
-  if (message.type === 'MESSAGE_DELETED') {
-    const index = messages.value.findIndex(msg => msg.id == message.message_id);
-    if (index !== -1) {
-      messages.value.splice(index, 1);
-    }
-  } else {
-    if (message.chat_id === route.params.chatID) {
-      if (message.id && message.username !== username) {
-        if (!messages.value.some(msg => msg.id == message.id)) {
-          messages.value.push({
-            ...message,
-            isOwnMessage: message.username === username,
-            profile_picture: `/${message.profile_picture}`,
-            last_message: message.last_message,
-            file_url: message.file_url
-          });
-        }
-      } else {
-        const index = messages.value.findIndex(msg => msg.id == message.tempID);
-        if (index !== -1) {
-          messages.value[index] = { ...messages.value[index], id: message.id, status: true };
+    const message = JSON.parse(event.data);
+    if (message.type === 'MESSAGE_DELETED') {
+      const index = messages.value.findIndex(msg => msg.id == message.message_id);
+      if (index !== -1) {
+        messages.value.splice(index, 1);
+      }
+    } else {
+      if (message.chat_id === route.params.chatID) {
+        if (message.id && message.username !== username) {
+          if (!messages.value.some(msg => msg.id == message.id)) {
+            messages.value.push({
+              ...message,
+              isOwnMessage: message.username === username,
+              profile_picture: `/${message.profile_picture}`,
+              last_message: message.last_message,
+              file_url: message.file_url
+            });
+          }
+        } else {
+          const index = messages.value.findIndex(msg => msg.id == message.tempID);
+          if (index !== -1) {
+            messages.value[index] = { ...messages.value[index], id: message.id, status: message.status };
+          }
         }
       }
     }
-  }
-  if (route.params.chatID === chatID) {
-    markChatNotificationsAsRead(chatID);
-  }
+    if (route.params.chatID === chatID) {
+      markChatNotificationsAsRead(chatID);
+    }
+  };
 };
-};
+
 
 const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
   try {
@@ -227,7 +230,7 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
       const newMessages = response.data.map(message => ({
         ...message,
         isOwnMessage: message.username === username,
-        status: true,
+        status: message.status, // Ensure status is correctly assigned
         time: new Date(message.created_at), 
         profile_picture: `/${message.profile_picture}`
       }));
@@ -253,6 +256,7 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
   }
 };
 
+
 const markChatNotificationsAsRead = async (chatID) => {
   try {
     await axios.post(`/v1/notifications/chat/mark-read/${chatID}`, {}, {
@@ -260,11 +264,20 @@ const markChatNotificationsAsRead = async (chatID) => {
         Authorization: `Bearer ${store.user.access}`
       }
     });
+
+    // Update messages status locally to "read"
+    messages.value.forEach(message => {
+      if (message.chat_id === chatID && message.username !== username) {
+        message.status = 'read';
+      }
+    });
+
     emitter.emit('chat-read', chatID);
   } catch (error) {
     console.error('Error marking notifications as read:', error);
   }
 };
+
 
 const saveScrollPosition = () => {
   const container = messagesContainer.value;
@@ -389,7 +402,7 @@ const sendMessage = async () => {
       file_url: URL.createObjectURL(file),
       created_at: new Date().toISOString(),
       isOwnMessage: true,
-      status: false,
+      status: 'sending', // Update to 'sending' instead of false
     };
     messages.value.push(tempFileMessage);
     const tempMessageID = tempFileMessage.id;
@@ -405,7 +418,7 @@ const sendMessage = async () => {
       message: newMessage.value,
       created_at: new Date().toISOString(),
       isOwnMessage: true,
-      status: false,
+      status: 'sending', // Update to 'sending' instead of false
     };
     messages.value.push(tempTextMessage);
     const tempMessageID = tempTextMessage.id;
@@ -428,7 +441,7 @@ const sendMessage = async () => {
         const messageID = await receiveResponse;
         const index = messages.value.findIndex(msg => msg.id === tempMessageID);
         if (index !== -1) {
-          messages.value[index] = { ...tempTextMessage, id: messageID, status: true };
+          messages.value[index] = { ...tempTextMessage, id: messageID, status: 'sent' };
         }
       } catch (error) {
         console.error("Error receiving message ID:", error);
@@ -443,14 +456,15 @@ const sendMessage = async () => {
 
 watch(isConnected, (newVal) => {
   if (newVal) {
-    const unsentMessages = messages.value.filter(msg => msg.status === false && msg.isOwnMessage);
+    const unsentMessages = messages.value.filter(msg => msg.status === 'sending' && msg.isOwnMessage);
     unsentMessages.forEach(message => {
       ws.send(JSON.stringify({ message: message.message, username }));
-      message.status = true;
+      message.status = 'sent';
     });
     removeOfflineMessages();
   }
 });
+
 
 watch(messages, () => {
   nextTick(scrollToBottom)

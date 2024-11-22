@@ -9,6 +9,7 @@ type Message struct {
     Username    string    `json:"username"`
     FileURL     string    `json:"file_url,omitempty"`
     CreatedAt   time.Time `json:"created_at"`
+    Status      string    `json:"status"`
 }
 
 type Chat struct {

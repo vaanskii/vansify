@@ -154,6 +154,7 @@ func ChatWsHandler(c *gin.Context) {
 
         incomingMessage.ChatID = chatID
         incomingMessage.Username = claims.Username
+        incomingMessage.Status = "sent" // Set initial status to 'sent'
 
         // Fetch the profile picture URL for the user
         var profilePicture string
@@ -164,8 +165,8 @@ func ChatWsHandler(c *gin.Context) {
         }
 
         // Save message to database
-        result, execErr := db.DB.Exec("INSERT INTO messages (chat_id, message, username, file_url) VALUES (?, ?, ?, ?)",
-            incomingMessage.ChatID, incomingMessage.Message, incomingMessage.Username, incomingMessage.FileURL)
+        result, execErr := db.DB.Exec("INSERT INTO messages (chat_id, message, username, file_url, status) VALUES (?, ?, ?, ?, ?)",
+            incomingMessage.ChatID, incomingMessage.Message, incomingMessage.Username, incomingMessage.FileURL, incomingMessage.Status)
         if execErr != nil {
             log.Println("DB Exec error:", execErr)
         }
@@ -177,6 +178,22 @@ func ChatWsHandler(c *gin.Context) {
         }
         incomingMessage.ID = int(messageID)
         fmt.Printf("Message ID: %d\n", incomingMessage.ID)
+
+        // Check if the recipient is connected
+        var recipientUsername string
+        if claims.Username == chat.User1 {
+            recipientUsername = chat.User2
+        } else {
+            recipientUsername = chat.User1
+        }
+
+        if notifications.IsUserConnected(recipientUsername) {
+            incomingMessage.Status = "delivered"
+            _, err := db.DB.Exec("UPDATE messages SET status = ? WHERE id = ?", incomingMessage.Status, incomingMessage.ID)
+            if err != nil {
+                log.Println("Error updating message status to delivered:", err)
+            }
+        }
 
         fullMessage := struct {
             models.Message
@@ -191,13 +208,6 @@ func ChatWsHandler(c *gin.Context) {
         conn.WriteMessage(messageType, broadcastMessage)
 
         hub.BroadcastMessage(conn, messageType, broadcastMessage)
-
-        var recipientUsername string
-        if claims.Username == chat.User1 {
-            recipientUsername = chat.User2
-        } else {
-            recipientUsername = chat.User1
-        }
 
         var lastMessage string
         err = db.DB.QueryRow("SELECT message FROM messages WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1", chatID).Scan(&lastMessage)
@@ -244,6 +254,7 @@ func ChatWsHandler(c *gin.Context) {
 }
 
 
+
 func GetChatHistory(c *gin.Context) {
     chatID := c.Param("chatID")
     chattingUser := c.Query("user")
@@ -282,7 +293,7 @@ func GetChatHistory(c *gin.Context) {
     }
 
     // Fetch messages for the chat with pagination
-    rows, err := db.DB.Query("SELECT id, chat_id, message, username, file_url, created_at FROM messages WHERE chat_id = ? LIMIT ? OFFSET ?", chatID, limit, offset)
+    rows, err := db.DB.Query("SELECT id, chat_id, message, username, file_url, created_at, status FROM messages WHERE chat_id = ? LIMIT ? OFFSET ?", chatID, limit, offset)
     if err != nil {
         log.Println("Error fetching chat history:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching chat history"})
@@ -294,7 +305,7 @@ func GetChatHistory(c *gin.Context) {
     for rows.Next() {
         var message models.Message
         var createdAt time.Time
-        if err := rows.Scan(&message.ID, &message.ChatID, &message.Message, &message.Username, &message.FileURL, &createdAt); err != nil {
+        if err := rows.Scan(&message.ID, &message.ChatID, &message.Message, &message.Username, &message.FileURL, &createdAt, &message.Status); err != nil {
             log.Println("Error scanning message:", err)
             c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning message"})
             return
@@ -308,6 +319,7 @@ func GetChatHistory(c *gin.Context) {
             "created_at":      formattedTime,
             "profile_picture":  profilePicture,
             "file_url":         message.FileURL,
+            "status":          message.Status, 
         })
     }
     log.Println("Fetched Messages:", messages)
