@@ -10,6 +10,7 @@ import (
 	"github.com/vaanskii/vansify/db"
 	notifications "github.com/vaanskii/vansify/notifications"
 	auth "github.com/vaanskii/vansify/services/auth"
+	"github.com/vaanskii/vansify/services/aws"
 	"github.com/vaanskii/vansify/services/chat"
 	follow "github.com/vaanskii/vansify/services/follow"
 	user "github.com/vaanskii/vansify/services/user"
@@ -21,32 +22,13 @@ func main() {
 
     auth.InitGoogleAuth()
 
-    auth.InitGoogleDrive()
-
+    aws.InitAWSSession()
 
     r := gin.Default()
-
-    // trustedProxies := []string{"10.0.0.0/16", "192.168.0.0/16"}
-    // if err := r.SetTrustedProxies(trustedProxies); err != nil {
-    //     panic(err)
-    // }
 
     r.Use(func(c *gin.Context){
         c.Writer.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' https://trusted.cdn.com; style-src 'self' https://trusted.cdn.com; img-src 'self' data: https://trusted.cdn.com; connect-src 'self' https://api.trusted.com")
         c.Next()
-    })
-
-    r.GET("/set-cookie", func(c *gin.Context) {
-        cookie := http.Cookie{
-            Name:       "token",
-            Value:      "your_encrypted_token",
-            HttpOnly:   true,
-            Secure:     true,
-            SameSite:   http.SameSiteStrictMode,
-            Expires:    time.Now().Add(24 * time.Hour),
-        }
-        http.SetCookie(c.Writer, &cookie)
-        c.JSON(http.StatusOK, gin.H{"message": "Cookie is set"})
     })
 
     r.HandleMethodNotAllowed = true
@@ -59,14 +41,14 @@ func main() {
     })
 
     r.Use(cors.New(cors.Config{
-        // AllowOrigins:     []string{"http://localhost:5173"},
-        AllowAllOrigins:  true,
+        AllowOrigins:     []string{"https://vansify.vercel.app", "http://localhost:5173"},
         AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-        AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-        ExposeHeaders:    []string{"Content-Length"},
-        AllowCredentials: true,
+        AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept"},
+        ExposeHeaders:    []string{"Content-Length", "ETag", "x-amz-server-side-encryption", "x-amz-access-control-allow-origin"},
+        AllowCredentials: false,
         MaxAge:           12 * time.Hour,
-    }))    
+    }))
+      
 
     r.Static("/assets", "./assets")
 
@@ -83,13 +65,14 @@ func main() {
         //google auth && google drive
         v1.GET("/auth/:provider", auth.AuthHandler) 
         v1.GET("/auth/:provider/callback", auth.AuthCallback)
-        v1.POST("/upload/chat/:chatid", auth.UploadFile)
-        v1.POST("/upload/profile/:username", auth.UploadFile)
         v1.POST("/create-user", auth.CreateUserWithUsername)
-        v1.GET("/file/:fileID", auth.ServeFile)
         
         // refresh token
         v1.POST("/refresh-token", utils.RefreshToken)
+
+        // aws s3
+        v1.POST("/upload/chat/:chatid", aws.UploadFile)
+        v1.POST("/upload/profile/:username", aws.UploadFile)
 
         // Follow/Unfollow system Routes
         v1.POST("/follow/:username", auth.AuthMiddleware(), follow.FollowUser)

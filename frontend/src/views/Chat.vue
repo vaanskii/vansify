@@ -350,7 +350,8 @@ const uploadFile = async (file, tempMessageID) => {
       headers: {
         'Content-Type': 'multipart/form-data',
         Authorization: `Bearer ${store.user.access}`
-      }
+      },
+      withCredentials: false
     });
     if (response.data) {
       const index = messages.value.findIndex(msg => msg.id === tempMessageID);

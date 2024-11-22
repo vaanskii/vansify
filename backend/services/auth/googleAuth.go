@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/big"
@@ -265,4 +266,16 @@ func generatePassword() string {
     }
 
     return string(password)
+}
+
+
+func saveToken(path string, token *oauth2.Token) {
+    fmt.Printf("Saving credential file to: %s\n", path)
+    f, err := os.Create(path)
+    if err != nil {
+        log.Fatalf("Unable to save oauth token: %v", err)
+    }
+    defer f.Close()
+
+    json.NewEncoder(f).Encode(token)
 }

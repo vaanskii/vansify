@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -18,9 +17,7 @@ import (
 	"github.com/vaanskii/vansify/db"
 	"github.com/vaanskii/vansify/models"
 	notifications "github.com/vaanskii/vansify/notifications"
-	"github.com/vaanskii/vansify/services/auth"
 	"github.com/vaanskii/vansify/utils"
-	"google.golang.org/api/drive/v3"
 )
 
 var (
@@ -158,58 +155,6 @@ func ChatWsHandler(c *gin.Context) {
         incomingMessage.ChatID = chatID
         incomingMessage.Username = claims.Username
 
-        if incomingMessage.Message == "FILE_UPLOAD" {
-            // Determine the folder name based on chat ID
-            folderName := "chat/" + chatID
-            log.Printf("Ensuring folder exists: %s", folderName)
-            parentFolderID, err := auth.EnsureFolderExists(folderName)
-            if err != nil {
-                log.Fatalf("Failed to ensure folder exists: %v", err)
-            }
-            log.Printf("Parent folder ID: %s", parentFolderID)
-
-            // Handle file upload
-            file, header, err := c.Request.FormFile("file")
-            if err != nil {
-                log.Println("Unable to get file:", err)
-                c.String(http.StatusBadRequest, fmt.Sprintf("Unable to get file: %v", err))
-                continue
-            }
-            defer file.Close()
-
-            // Upload the file to Google Drive
-            log.Printf("Uploading file to Google Drive in folder: %s", folderName)
-            driveFile, err := auth.DriveService.Files.Create(&drive.File{
-                Name:    header.Filename,
-                Parents: []string{parentFolderID},
-            }).Media(file).Do()
-            if err != nil {
-                log.Println("Unable to upload file to Drive:", err)
-                c.String(http.StatusInternalServerError, fmt.Sprintf("Unable to upload file to Drive: %v", err))
-                continue
-            }
-
-            // Make the file publicly accessible
-            log.Printf("Setting permissions for file ID: %s", driveFile.Id)
-            _, err = auth.DriveService.Permissions.Create(driveFile.Id, &drive.Permission{
-                Type: "anyone",
-                Role: "reader",
-            }).Do()
-            if err != nil {
-                log.Println("Unable to set file permissions:", err)
-                c.String(http.StatusInternalServerError, fmt.Sprintf("Unable to set file permissions: %v", err))
-                continue
-            }
-
-            // Generate the URL pointing to your backend endpoint
-            backendUrl := os.Getenv("BACKEND_URL")
-            fileURL := fmt.Sprintf("%s/v1/file/%s", backendUrl, driveFile.Id)
-            incomingMessage.Message = "FILE_UPLOAD_SUCCESS"
-            incomingMessage.FileURL = fileURL
-
-            log.Printf("File uploaded successfully: %s (ID: %s, URL: %s)", header.Filename, driveFile.Id, fileURL)
-        }
-
         // Fetch the profile picture URL for the user
         var profilePicture string
         err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", incomingMessage.Username).Scan(&profilePicture)
@@ -286,7 +231,7 @@ func ChatWsHandler(c *gin.Context) {
                         "total_unread_count": totalUnreadCount,
                         "message":            incomingMessage.Message,
                         "user":               claims.Username,
-                        "profile_picture":    profilePicture,
+                        "profile_picture":     profilePicture,
                         "sender":             claims.Username,
                         "last_message_time":  time.Now().Format(time.RFC3339),
                         "last_message":       lastMessage,
@@ -361,8 +306,8 @@ func GetChatHistory(c *gin.Context) {
             "message":         message.Message,
             "username":        message.Username,
             "created_at":      formattedTime,
-            "profile_picture": profilePicture,
-            "file_url":        message.FileURL,
+            "profile_picture":  profilePicture,
+            "file_url":         message.FileURL,
         })
     }
     log.Println("Fetched Messages:", messages)
@@ -406,7 +351,6 @@ func DeleteChat(c *gin.Context) {
     }
 
     username := customClaims.Username
-    userEmail := customClaims.Email
     var chatUserCount int
 
     // Ensure the user is part of the chat to delete it
@@ -423,22 +367,6 @@ func DeleteChat(c *gin.Context) {
         log.Printf("Error deleting chat: %v", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting chat"})
         return
-    }
-
-    folderExists, err := auth.FolderExists("chat/" + chatID)
-    if err != nil {
-        log.Printf("Error checking chat folder existence in Google Drive: %v", err)
-        c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error checking chat folder existence in Google Drive: %v", err)})
-        return
-    }
-
-    if folderExists {
-        err = auth.DeleteChatAndImages(chatID, userEmail)
-        if err != nil {
-            log.Printf("Error deleting chat images from Google Drive: %v", err)
-            c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error deleting chat images from Google Drive: %v", err)})
-            return
-        }
     }
 
     // Broadcast the chat deletion to connected clients
