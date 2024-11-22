@@ -183,34 +183,38 @@ const connectWebSocket = (chatID, token) => {
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
     if (message.type === 'MESSAGE_DELETED') {
-      const index = messages.value.findIndex(msg => msg.id == message.message_id);
-      if (index !== -1) {
-        messages.value.splice(index, 1);
-      }
-    } else {
-      if (message.chat_id === route.params.chatID) {
-        if (message.id && message.username !== username) {
-          if (!messages.value.some(msg => msg.id == message.id)) {
-            messages.value.push({
-              ...message,
-              isOwnMessage: message.username === username,
-              profile_picture: `/${message.profile_picture}`,
-              last_message: message.last_message,
-              file_url: message.file_url
-            });
-          }
-        } else {
-          const index = messages.value.findIndex(msg => msg.id == message.tempID);
-          if (index !== -1) {
-            messages.value[index] = { ...messages.value[index], id: message.id, status: message.status };
-          }
+        const index = messages.value.findIndex(msg => msg.id == message.message_id);
+        if (index !== -1) {
+            messages.value.splice(index, 1);
         }
-      }
+    } else {
+        if (message.chat_id === route.params.chatID) {
+            if (message.id && message.username !== username) {
+                if (!messages.value.some(msg => msg.id == message.id)) {
+                    console.log(`New message received: ${message.message}`);
+                    messages.value.push({
+                        ...message,
+                        isOwnMessage: message.username === username,
+                        profile_picture: `/${message.profile_picture}`,
+                        last_message: message.last_message,
+                        file_url: message.file_url
+                    });
+                }
+            } else {
+                const index = messages.value.findIndex(msg => msg.id == message.tempID);
+                if (index !== -1) {
+                    console.log(`Updating message ID ${message.tempID} with new ID ${message.id} and status ${message.status}`);
+                    messages.value[index] = { ...messages.value[index], id: message.id, status: message.status };
+                }
+            }
+        }
     }
+
     if (route.params.chatID === chatID) {
-      markChatNotificationsAsRead(chatID);
+        markChatNotificationsAsRead(chatID);
     }
-  };
+};
+
 };
 
 
@@ -351,43 +355,45 @@ const onFileSelected = (event) => {
 };
 
 const uploadFile = async (file, tempMessageID) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('metadata', new Blob([JSON.stringify({
-    name: file.name,
-    parents: [route.params.chatID]
-  })], { type: 'application/json' }));
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('metadata', new Blob([JSON.stringify({
+        name: file.name,
+        parents: [route.params.chatID]
+    })], { type: 'application/json' }));
 
-  try {
-    const response = await axios.post(`/v1/upload/chat/${route.params.chatID}`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        Authorization: `Bearer ${store.user.access}`
-      },
-      withCredentials: false
-    });
-    if (response.data) {
-      const index = messages.value.findIndex(msg => msg.id === tempMessageID);
-      if (index !== -1) {
-        messages.value[index] = {
-          ...messages.value[index],
-          file_url: response.data.fileURL,
-          message: "Sent picture",
-          status: true,
-        };
-        ws.send(JSON.stringify({ ...messages.value[index], tempID: tempMessageID }));
-        saveOfflineMessages();
-      }
+    try {
+        const response = await axios.post(`/v1/upload/chat/${route.params.chatID}`, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+                Authorization: `Bearer ${store.user.access}`
+            },
+            withCredentials: false
+        });
+        if (response.data) {
+            const index = messages.value.findIndex(msg => msg.id === tempMessageID);
+            if (index !== -1) {
+                messages.value[index] = {
+                    ...messages.value[index],
+                    file_url: response.data.fileURL,
+                    message: "Sent picture",
+                    status: 'sending', // Keep status as 'sending'
+                };
+                // Send the updated message with the file URL
+                ws.send(JSON.stringify({ ...messages.value[index], tempID: tempMessageID }));
+            }
+        }
+    } catch (error) {
+        console.error("Error uploading file:", error);
+        const index = messages.value.findIndex(msg => msg.id === tempMessageID);
+        if (index !== -1) {
+            messages.value[index].status = 'sending';
+        }
     }
-  } catch (error) {
-    console.error("Error uploading file:", error);
-    const index = messages.value.findIndex(msg => msg.id === tempMessageID);
-    if (index !== -1) {
-      messages.value[index].status = false;
-      saveOfflineMessages();
-    }
-  }
+    saveOfflineMessages();
 };
+
+
 
 const sendMessage = async () => {
   if (!newMessage.value && !selectedFile.value) {
@@ -406,11 +412,33 @@ const sendMessage = async () => {
     };
     messages.value.push(tempFileMessage);
     const tempMessageID = tempFileMessage.id;
-    saveOfflineMessages();
 
     await uploadFile(file, tempMessageID);
     selectedFile.value = null;
     fileInput.value.value = "";
+
+    const receiveResponse = new Promise((resolve, reject) => {
+      const responseHandler = (event) => {
+        const response = JSON.parse(event.data);
+        if (response.id) {
+          ws.removeEventListener('message', responseHandler);
+          resolve(response.id);
+        } else {
+          reject("Message ID not received");
+        }
+      };
+      ws.addEventListener('message', responseHandler);
+    });
+
+    try {
+      const messageID = await receiveResponse;
+      const index = messages.value.findIndex(msg => msg.id === tempMessageID);
+      if (index !== -1) {
+        messages.value[index] = { ...messages.value[index], id: messageID, status: 'sent' };
+      }
+    } catch (error) {
+      console.error("Error receiving message ID:", error);
+    }
   } else {
     const tempTextMessage = {
       id: Date.now(),
@@ -437,6 +465,7 @@ const sendMessage = async () => {
         };
         ws.addEventListener('message', responseHandler);
       });
+
       try {
         const messageID = await receiveResponse;
         const index = messages.value.findIndex(msg => msg.id === tempMessageID);
@@ -458,12 +487,13 @@ watch(isConnected, (newVal) => {
   if (newVal) {
     const unsentMessages = messages.value.filter(msg => msg.status === 'sending' && msg.isOwnMessage);
     unsentMessages.forEach(message => {
-      ws.send(JSON.stringify({ message: message.message, username }));
+      ws.send(JSON.stringify(message));
       message.status = 'sent';
     });
     removeOfflineMessages();
   }
 });
+
 
 
 watch(messages, () => {
