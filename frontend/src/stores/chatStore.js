@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
 import emitter from '@/eventBus';
 import { userStore } from './user';
@@ -10,6 +10,7 @@ export const useChatStore = defineStore('chatStore', () => {
   const wsConnected = ref(false);
   const loader = ref(true);
   const store = userStore();
+  const activeUsers = ref([]);
 
   const fetchChats = async () => {
     try {
@@ -28,7 +29,6 @@ export const useChatStore = defineStore('chatStore', () => {
           last_message: chat.last_message
         }));
         chats.value = newChats;
-        console.log("Chats fetched:", newChats);
         loader.value = false;
       } else {
         chats.value = [];
@@ -74,11 +74,17 @@ export const useChatStore = defineStore('chatStore', () => {
     }));
   };
 
+  const handleActiveUsersFetched = (activeUsersData) => {
+    activeUsers.value = activeUsersData; 
+  };
+
   const handleWebSocketOpen = () => {
-    console.log("WebSocket connection opened in ChatListView");
+    console.log("WebSocket connection opened");
     wsConnected.value = true;
     loader.value = false;
   };
+
+  
 
   const handleWebSocketMessage = (data) => {
     try {
@@ -110,6 +116,25 @@ export const useChatStore = defineStore('chatStore', () => {
     }
   };
 
+  const fetchActiveUsers = async () => {
+    try {
+      const response = await axios.get('/v1/active-users', {
+        headers: {
+          Authorization: `Bearer ${store.user.access}`
+        }
+      });
+      if (response.data && response.data.active_users) {
+        activeUsers.value = response.data.active_users;
+        emitter.emit("active-users-fetched", response.data.active_users);
+      } else {
+        activeUsers.value = [];
+      }
+    } catch (err) {
+      error.value = err.response ? err.response.data.error : 'An error occurred';
+      console.error("Error fetching active users:", err);
+    }
+  };
+
   const markChatAsRead = async (chatID) => {
     try {
       await axios.post(`/v1/notifications/chat/mark-read/${chatID}`, {}, {
@@ -135,20 +160,31 @@ export const useChatStore = defineStore('chatStore', () => {
     wsConnected.value = false;
   };
 
+  onMounted(() => {
+    emitter.on('active-users-fetched', handleActiveUsersFetched);
+  });
+
+  onUnmounted(() => {
+    emitter.off('active-users-fetched', handleActiveUsersFetched);
+  });
+
   return {
     chats,
     error,
     wsConnected,
     loader,
+    activeUsers,
     fetchChats,
     deleteChat,
     sortedChats,
     formatTime,
+    fetchActiveUsers,
     updateMessageTimes,
     handleWebSocketOpen,
     handleWebSocketMessage,
     markChatAsRead,
     handleWebSocketError,
-    handleWebSocketClose
+    handleWebSocketClose,
+    handleActiveUsersFetched
   };
 });

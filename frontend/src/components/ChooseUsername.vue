@@ -28,6 +28,7 @@ const submitUsername = async () => {
     const response = await axios.post('/v1/create-user', {
       username: username.value,
       email: email,
+      active: true
     });
 
     // Extract tokens and additional user data from the response

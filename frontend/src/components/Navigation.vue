@@ -11,7 +11,7 @@
         <span v-if="unreadNotificationCount > 0" class="badge">{{ unreadNotificationCount }}</span>
       </router-link>
       <router-link v-if="store.user.isAuthenticated" :to="`/${store.user.username}`" class="nav-link">
-        My Profile
+        {{ store.user.username }}
       </router-link>
       <button v-if="store.user.isAuthenticated" @click="logout" class="nav-button">Logout</button>
     </div>
@@ -99,10 +99,17 @@ const handleWebSocketClose = () => {
   wsConnected.value = false;
 };
 
-const logout = () => {
+const logout = async () => {
+  try {
+    await axios.post('/v1/logout', {},);
+    console.log('User logged out successfully');
+  } catch (error) {
+    console.error('Error logging out:', error);
+  }
   store.removeToken();
   router.push('/login');
 };
+
 
 onMounted(() => {
   emitter.on('ws-open', handleWebSocketOpen);

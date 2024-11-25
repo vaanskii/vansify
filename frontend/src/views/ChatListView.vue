@@ -1,6 +1,16 @@
 <template>
   <div>
     <h1>Your Chats</h1>
+    <h2>Active Users</h2>
+    <ul v-if="chatStore.activeUsers.length > 0">
+      <li v-for="user in chatStore.activeUsers" :key="user.username">
+        <img :src="user.profile_picture" alt="Profile Picture" width="30" height="30" />
+        {{ user.username }}
+      </li>
+    </ul>
+    <div v-else>No active users found</div>
+
+    <h2>Your Chats</h2>
     <ul v-if="chatStore.chats.length > 0">
       <li v-for="chat in sortedChats" :key="chat.chat_id">
         <router-link 
@@ -13,6 +23,7 @@
           <br>
           <span>{{ formatTime(chat.last_message_time) }}</span> - 
           <span>{{ chat.last_message }}</span>
+          <span v-if="isUserActive(chat.user)" class="active-indicator">●</span>
         </router-link>
         <button @click="deleteChat(chat.chat_id)">Delete</button>
       </li>
@@ -22,15 +33,16 @@
   </div>
 </template>
 
-
 <script setup>
 import { onMounted, onUnmounted, computed } from 'vue';
 import { useChatStore } from '@/stores/chatStore';
+import { useActiveUsersStore } from '@/stores/activeUsers';
 import { userStore } from '@/stores/user';
 import emitter from '@/eventBus';
 
 const store = userStore();
 const chatStore = useChatStore();
+const activeUsersStore = useActiveUsersStore();
 
 const sortedChats = computed(() => chatStore.sortedChats);
 
@@ -39,19 +51,27 @@ onMounted(() => {
     if (chatStore.chats.length === 0) {
       chatStore.fetchChats();
     }
-    emitter.on('ws-open', chatStore.handleWebSocketOpen);
-    emitter.on('ws-message', chatStore.handleWebSocketMessage);
-    emitter.on('ws-error', chatStore.handleWebSocketError);
-    emitter.on('ws-close', chatStore.handleWebSocketClose);
+    activeUsersStore.connectWebSocket();
+
+    emitter.on('active-users-ws-open', chatStore.handleWebSocketOpen);
+    emitter.on('active-users-ws-error', chatStore.handleWebSocketError);
+    emitter.on('active-users-ws-close', chatStore.handleWebSocketClose);
+    emitter.on('active-users-fetched', chatStore.handleActiveUsersFetched);
+
+    chatStore.fetchActiveUsers();
+
     setInterval(chatStore.updateMessageTimes, 60000);
   }
 });
 
 onUnmounted(() => {
-  emitter.off('ws-open', chatStore.handleWebSocketOpen);
-  emitter.off('ws-message', chatStore.handleWebSocketMessage);
-  emitter.off('ws-error', chatStore.handleWebSocketError);
-  emitter.off('ws-close', chatStore.handleWebSocketClose);
+  if (chatStore.wsConnected) {
+    chatStore.handleWebSocketClose();
+  }
+  emitter.off('active-users-ws-open', chatStore.handleWebSocketOpen);
+  emitter.off('active-users-ws-error', chatStore.handleWebSocketError);
+  emitter.off('active-users-ws-close', chatStore.handleWebSocketClose);
+  emitter.off('active-users-fetched', chatStore.handleActiveUsersFetched);
 });
 
 const deleteChat = (chatID) => {
@@ -65,4 +85,15 @@ const markChatAsRead = (chatID) => {
 const formatTime = (timestamp) => {
   return chatStore.formatTime(timestamp);
 };
+
+const isUserActive = (username) => {
+  return chatStore.activeUsers.some(user => user.username === username);
+};
 </script>
+
+<style>
+.active-indicator {
+  color: green;
+  margin-left: 5px;
+}
+</style>

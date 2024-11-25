@@ -11,6 +11,7 @@ import (
 	"github.com/lpernett/godotenv"
 	"github.com/vaanskii/vansify/db"
 	"github.com/vaanskii/vansify/models"
+	"github.com/vaanskii/vansify/services/user"
 	"github.com/vaanskii/vansify/utils"
 	"gopkg.in/gomail.v2"
 )
@@ -140,48 +141,71 @@ func RegisterUser(c *gin.Context) {
 
 // LoginUser handles user login
 func LoginUser(c *gin.Context) {
+    log.Println("LoginUser called")
+
     var request struct {
         Username   string `json:"username"`
         Password   string `json:"password"`
         RememberMe bool   `json:"remember_me"`
     }
     if err := c.ShouldBindJSON(&request); err != nil {
+        log.Println("Error binding JSON:", err)
         c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
         return
     }
+
+    log.Printf("Login request received for username: %s", request.Username)
+
     // Check if user exists
     row := db.DB.QueryRow("SELECT id, username, email, password, verified FROM users WHERE username = ?", request.Username)
     var dbUser models.User
     if err := row.Scan(&dbUser.ID, &dbUser.Username, &dbUser.Email, &dbUser.Password, &dbUser.Verified); err != nil {
+        log.Println("Error finding user:", err)
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
         return
     }
+
+    log.Printf("User found: %s", dbUser.Username)
+
     // Check password
     if !dbUser.CheckPassword(request.Password) {
+        log.Println("Invalid password")
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
         return
     }
-    if !dbUser.Verified { // Check if verified
+
+    if !dbUser.Verified {
+        log.Println("User not verified")
         c.JSON(http.StatusForbidden, gin.H{"error": "Please verify your email before logging in."})
         return
     }
+
     // Generate tokens
     accessToken, err := utils.GenerateAccessToken(request.Username, dbUser.Email)
     if err != nil {
+        log.Println("Error generating access token:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating access token"})
         return
     }
     refreshToken, err := utils.GenerateRefreshToken(request.Username, dbUser.Email)
     if err != nil {
+        log.Println("Error generating refresh token:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating refresh token"})
         return
     }
 
-    // Set refresh token in a cookie if "Remember Me" is checked
     if request.RememberMe {
+        log.Println("Setting refresh token cookie")
         c.SetCookie("refresh_token", refreshToken, 7*24*3600, "/", "", false, true)
     }
 
+    log.Printf("Updating active status for user: %s", dbUser.Username)
+    _, err = db.DB.Exec("UPDATE users SET active = true WHERE username = ?", dbUser.Username)
+    if err != nil {
+        log.Println("Error updating user active status:", err)
+    }
+
+    log.Println("Login successful, sending response")
     c.JSON(http.StatusOK, gin.H{
         "access_token": accessToken,
         "refresh_token": refreshToken,
@@ -189,8 +213,47 @@ func LoginUser(c *gin.Context) {
         "username": dbUser.Username,
         "email": dbUser.Email,
         "oauth_user": dbUser.OauthUser,
+        "active": true,
     })
+
+    log.Println("Broadcasting active users")
+    go user.FetchActiveUsersAndBroadcast(db.DB)
 }
+
+
+func LogoutUser(c *gin.Context) {
+    claims, exists := c.Get("claims")
+    if !exists {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+        return
+    }
+    customClaims, ok := claims.(*utils.CustomClaims)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+        return
+    }
+    username := customClaims.Username
+
+    log.Printf("Logout request received for username: %s", username)
+
+    // Update the user's active status to false
+    _, err := db.DB.Exec("UPDATE users SET active = ? WHERE username = ?", false, username)
+    if err != nil {
+        log.Printf("Error updating user active status for username %s: %v", username, err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+        return
+    } else {
+        log.Printf("Updated user active status to inactive for username %s", username)
+    }
+
+    c.SetCookie("refresh_token", "", -1, "/", "", false, true)
+    c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
+
+    log.Println("Broadcasting active users")
+    go user.FetchActiveUsersAndBroadcast(db.DB)
+}
+
+
 
 func DeleteUser(c *gin.Context) {
     log.Println("DeleteUser request received")

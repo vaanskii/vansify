@@ -1,4 +1,4 @@
-package chat
+package hub
 
 import (
 	"sync"
@@ -45,3 +45,5 @@ func (h *Hub) BroadcastMessage(sender *websocket.Conn, messageType int, message 
 		}
 	}
 }
+
+var GlobalChatHub = NewHub()

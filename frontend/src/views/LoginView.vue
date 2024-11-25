@@ -31,6 +31,7 @@ import { ref } from 'vue';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
 import { userStore } from '@/stores/user';
+import { useActiveUsersStore } from '@/stores/activeUsers';
 
 const username = ref('');
 const password = ref('');
@@ -39,17 +40,20 @@ const error = ref('');
 const message = ref('');
 const router = useRouter();
 const store = userStore();
+const activeUsersStore = useActiveUsersStore();
 
 const login = async () => {
   try {
+    console.log('Login function called');
     const response = await axios.post('/v1/login', {
       username: username.value,
       password: password.value,
       remember_me: rememberMe.value,
     });
+    console.log('Response received:', response.data);
+
     message.value = response.data.message;
 
-    // Handle success - save tokens and user info
     const accessToken = response.data.access_token;
     const refreshToken = response.data.refresh_token;
     store.setToken({
@@ -61,15 +65,18 @@ const login = async () => {
       oauth_user: response.data.oauth_user,
     });
 
+    activeUsersStore.connectWebSocket();
+
     router.push('/');
   } catch (err) {
+    console.error('Login failed:', err);
     error.value = err.response ? err.response.data.error : 'An error occurred';
   }
 };
 
 const loginWithGoogle = () => {
+  console.log('Login with Google called');
   const apiUrl = import.meta.env.VITE_API_URL;
   window.location.href = `${apiUrl}/v1/auth/google`;
 };
-
 </script>

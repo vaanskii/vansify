@@ -20,6 +20,7 @@ type User struct {
 	Followings       []User      `json:"followings"`
 	FollowersCount   int64       `json:"followers_count"`
 	FollowingsCount  int64       `json:"followings_count"`
+	Active           bool        `json:"active"`
 }
 
 // HashPassword hashes the user's password

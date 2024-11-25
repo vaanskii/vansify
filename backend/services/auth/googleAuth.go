@@ -22,6 +22,7 @@ import (
 	"github.com/markbates/goth/providers/google"
 	"github.com/vaanskii/vansify/db"
 	"github.com/vaanskii/vansify/models"
+	activeUsers "github.com/vaanskii/vansify/services/user"
 	"github.com/vaanskii/vansify/utils"
 	"golang.org/x/oauth2"
 )
@@ -152,9 +153,10 @@ func AuthCallback(c *gin.Context) {
     saveToken("token.json", token)
 
     var existingUser models.User
-    err = db.DB.QueryRow("SELECT id, username, password, email, oauth_user FROM users WHERE email = ?", user.Email).Scan(&existingUser.ID, &existingUser.Username, &existingUser.Password, &existingUser.Email, &existingUser.OauthUser)
+    err = db.DB.QueryRow("SELECT id, username, password, email, oauth_user, active FROM users WHERE email = ?", user.Email).Scan(&existingUser.ID, &existingUser.Username, &existingUser.Password, &existingUser.Email, &existingUser.OauthUser, &existingUser.Active)
     if err == nil {
         log.Println("User already exists:", existingUser.Email)
+
         // Generate tokens for existing user
         accessToken, err := utils.GenerateAccessToken(existingUser.Username, existingUser.Email)
         if err != nil {
@@ -177,16 +179,29 @@ func AuthCallback(c *gin.Context) {
             "&access_token=" + url.QueryEscape(accessToken) +
             "&refresh_token=" + url.QueryEscape(refreshToken) +
             "&id=" + strconv.FormatInt(existingUser.ID, 10) +
-            "&oauth_user=" + strconv.FormatBool(existingUser.OauthUser)
+            "&oauth_user=" + strconv.FormatBool(existingUser.OauthUser) +
+            "&active=" + strconv.FormatBool(existingUser.Active)
 
+        // Send the response first
         c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 
+        // Then update the user's active status and broadcast in a goroutine
+        go func() {
+            _, err := db.DB.Exec("UPDATE users SET active = ? WHERE email = ?", true, user.Email)
+            if err != nil {
+                log.Println("Error updating user active status:", err)
+                return
+            }
+            activeUsers.FetchActiveUsersAndBroadcast(db.DB)
+        }()
+        return
     }
 
     frontendUrl := os.Getenv("FRONTEND_URL")
     redirectURL := frontendUrl + "/choose-username?email=" + url.QueryEscape(user.Email)
     c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
+
 
 
 func CreateUserWithUsername(c *gin.Context) {
@@ -211,6 +226,7 @@ func CreateUserWithUsername(c *gin.Context) {
         Email:          userReq.Email,
         Verified:        true,
         OauthUser:      true,
+        Active:         true,
     }
 
     err = newUser.HashPassword()
@@ -239,6 +255,9 @@ func CreateUserWithUsername(c *gin.Context) {
         c.String(http.StatusInternalServerError, fmt.Sprintf("Error generating refresh token: %v", err))
         return
     }
+
+    // Broadcast the active users
+    activeUsers.FetchActiveUsersAndBroadcast(db.DB)
 
     c.JSON(http.StatusOK, gin.H{
         "access_token":  accessToken,

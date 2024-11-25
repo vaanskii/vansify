@@ -190,3 +190,51 @@ func GetUserChats(c *gin.Context) {
     c.JSON(http.StatusOK, gin.H{"chats": chats})
 }
 
+func GetActiveUsersHandler(c *gin.Context) {
+    claims, exists := c.Get("claims")
+    if !exists {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+        return
+    }
+
+    customClaims, ok := claims.(*utils.CustomClaims)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+        return
+    }
+
+    authenticatedUsername := customClaims.Username
+
+    var activeUsers []struct {
+        Username       string `json:"username"`
+        ProfilePicture string `json:"profile_picture"`
+    }
+
+    rows, err := db.DB.Query("SELECT username, profile_picture FROM users WHERE active = true")
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+    defer rows.Close()
+
+    for rows.Next() {
+        var user struct {
+            Username       string `json:"username"`
+            ProfilePicture string `json:"profile_picture"`
+        }
+        if err := rows.Scan(&user.Username, &user.ProfilePicture); err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+            return
+        }
+
+        if user.Username != authenticatedUsername {
+            activeUsers = append(activeUsers, user)
+        }
+    }
+    if err := rows.Err(); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"active_users": activeUsers})
+}

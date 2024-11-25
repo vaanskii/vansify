@@ -8,9 +8,11 @@
 import { onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { userStore } from '@/stores/user';
+import { useActiveUsersStore } from '@/stores/activeUsers';
 
 const router = useRouter();
 const store = userStore();
+const activeUsersStore = useActiveUsersStore();
 
 onMounted(() => {
   try {
@@ -31,7 +33,11 @@ onMounted(() => {
       email: email,
       oauth_user: oauthUser,
     });
-    
+
+    // Establish WebSocket connection for active users
+    activeUsersStore.connectWebSocket();
+
+    // Redirect after successful login
     router.push('/');
   } catch (err) {
     console.error('Error during Google OAuth callback:', err);

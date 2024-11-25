@@ -19,7 +19,6 @@ import (
 
 func main() {
     db.ConnectToDatabase()
-
     auth.InitGoogleAuth()
 
     aws.InitAWSSession()
@@ -61,8 +60,9 @@ func main() {
         v1.DELETE("/delete-account", auth.AuthMiddleware(), auth.DeleteUser)
         v1.POST("/forgot-password", auth.ForgotPassword)
         v1.POST("/reset-password", auth.ResetPassword)
+        v1.POST("/logout", auth.AuthMiddleware(), auth.LogoutUser)
 
-        //google auth && google drive
+        //google auth
         v1.GET("/auth/:provider", auth.AuthHandler) 
         v1.GET("/auth/:provider/callback", auth.AuthCallback)
         v1.POST("/create-user", auth.CreateUserWithUsername)
@@ -95,6 +95,8 @@ func main() {
         // User Profile Retrieval
         v1.GET("/me/chats", auth.AuthMiddleware(), user.GetUserChats)
         v1.GET("/user/:username", user.GetUserByUsername)
+        v1.GET("/active-users", auth.AuthMiddleware(), user.GetActiveUsersHandler)
+        v1.GET("/active-users/ws", user.HandleConnections)
 
         // General Notifications
         v1.GET("/notifications", auth.AuthMiddleware(), notifications.GetNotifications)

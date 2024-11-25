@@ -7,5 +7,6 @@ CREATE TABLE users (
     gender VARCHAR(10) DEFAULT 'man',
     verified BOOLEAN DEFAULT FALSE,
     oauth_user BOOLEAN DEFAULT FALSE,
+    active BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
