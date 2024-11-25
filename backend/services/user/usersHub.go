@@ -13,7 +13,7 @@ import (
 )
 
 var (
-    clients     = make(map[*websocket.Conn]string)  // Store username with each connection
+    clients     = make(map[*websocket.Conn]string)
     broadcast   = make(chan []struct {
         Username       string `json:"username"`
         ProfilePicture string `json:"profile_picture"`
@@ -57,7 +57,6 @@ func HandleConnections(c *gin.Context) {
             // Check if the user is still disconnected
             for _, connectedUsername := range clients {
                 if connectedUsername == username {
-                    // User reconnected, no need to update inactive status
                     return
                 }
             }
@@ -69,7 +68,6 @@ func HandleConnections(c *gin.Context) {
                 log.Printf("Updated user active status to inactive for username %s", username)
             }
 
-            // Broadcast updated active users
             go FetchActiveUsersAndBroadcast(db.DB)
         }(username)
     }()
@@ -98,7 +96,6 @@ func HandleConnections(c *gin.Context) {
     }
 }
 
-// Broadcast messages to all clients
 func HandleMessages() {
     for {
         msg := <-broadcast
