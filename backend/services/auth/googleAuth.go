@@ -22,6 +22,7 @@ import (
 	"github.com/markbates/goth/providers/google"
 	"github.com/vaanskii/vansify/db"
 	"github.com/vaanskii/vansify/models"
+	"github.com/vaanskii/vansify/services/chat"
 	activeUsers "github.com/vaanskii/vansify/services/user"
 	"github.com/vaanskii/vansify/utils"
 	"golang.org/x/oauth2"
@@ -185,14 +186,45 @@ func AuthCallback(c *gin.Context) {
         // Send the response first
         c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 
-        // Then update the user's active status and broadcast in a goroutine
+        // Then update the user's active status, broadcast active users, and update message statuses
         go func() {
-            _, err := db.DB.Exec("UPDATE users SET active = ? WHERE email = ?", true, user.Email)
+            _, err := db.DB.Exec("UPDATE users SET active = true, last_active = NULL WHERE email = ?", user.Email)
             if err != nil {
                 log.Println("Error updating user active status:", err)
                 return
             }
+
+            // Fetch active users and broadcast
             activeUsers.FetchActiveUsersAndBroadcast(db.DB)
+
+            // Update message statuses for all chats involving the user
+            rows, err := db.DB.Query("SELECT chat_id, user1, user2 FROM chats WHERE user1 = ? OR user2 = ?", existingUser.Username, existingUser.Username)
+            if err != nil {
+                log.Println("Error querying chats for user:", err)
+                return
+            }
+            defer rows.Close()
+
+            for rows.Next() {
+                var chatID string
+                var user1 string
+                var user2 string
+                if err := rows.Scan(&chatID, &user1, &user2); err != nil {
+                    log.Println("Error scanning chat ID:", err)
+                    continue
+                }
+
+                // Determine the other user in the chat
+                var otherUser string
+                if existingUser.Username == user1 {
+                    otherUser = user2
+                } else {
+                    otherUser = user1
+                }
+
+                // Update message statuses for all active chats
+                go chat.UpdateStatusWhenUserBecomesActive(chatID,  existingUser.Username, otherUser)
+            }
         }()
         return
     }

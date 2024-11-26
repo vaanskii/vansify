@@ -36,7 +36,7 @@ func HandleConnections(c *gin.Context) {
     log.Printf("Client connected: %s, Username: %s", ws.RemoteAddr(), username)
 
     clientMutex.Lock()
-    clients[ws] = username  // Store the username in the clients map
+    clients[ws] = username
     clientMutex.Unlock()
 
     defer func() {
@@ -57,11 +57,16 @@ func HandleConnections(c *gin.Context) {
             // Check if the user is still disconnected
             for _, connectedUsername := range clients {
                 if connectedUsername == username {
+                    // User reconnected, reset becoming_inactive status
+                    _, err := db.DB.Exec("UPDATE users SET becoming_inactive = FALSE WHERE username = ?", username)
+                    if err != nil {
+                        log.Printf("Error updating becoming_inactive status for username %s: %v", username, err)
+                    }
                     return
                 }
             }
 
-            _, err := db.DB.Exec("UPDATE users SET active = false WHERE username = ?", username)
+            _, err := db.DB.Exec("UPDATE users SET active = false, becoming_inactive = FALSE, last_active = NOW() WHERE username = ?", username)
             if err != nil {
                 log.Printf("Error updating user active status for username %s: %v", username, err)
             } else {
@@ -72,8 +77,7 @@ func HandleConnections(c *gin.Context) {
         }(username)
     }()
 
-    // Mark user as active immediately upon connection
-    _, err = db.DB.Exec("UPDATE users SET active = true WHERE username = ?", username)
+    _, err = db.DB.Exec("UPDATE users SET active = true, last_active = NULL, becoming_inactive = FALSE WHERE username = ?", username)
     if err != nil {
         log.Printf("Error updating user active status for username %s: %v", username, err)
     } else {
@@ -90,11 +94,18 @@ func HandleConnections(c *gin.Context) {
             clientMutex.Lock()
             delete(clients, ws)
             clientMutex.Unlock()
+
+            _, err := db.DB.Exec("UPDATE users SET becoming_inactive = TRUE WHERE username = ?", username)
+            if err != nil {
+                log.Printf("Error updating becoming_inactive status for username %s: %v", username, err)
+            }
+
             break
         }
         log.Printf("Received message from client: %s, Username: %s, Message: %v", ws.RemoteAddr(), username, msg)
     }
 }
+
 
 func HandleMessages() {
     for {
@@ -166,4 +177,16 @@ func FetchActiveUsersAndBroadcast(db *sql.DB) {
     }
     clientMutex.Unlock()
     log.Println("Broadcast complete")
+}
+
+// IsUserActive checks if a user is currently active
+func IsUserActive(username string) (bool, error) {
+    var isActive bool
+    err := db.DB.QueryRow("SELECT active FROM users WHERE username = ?", username).Scan(&isActive)
+    if err != nil {
+        log.Printf("Error querying active status for user isuseractive %s: %v", username, err)
+        return false, err
+    }
+    log.Printf("User %s active status: %v", username, isActive)
+    return isActive, nil
 }

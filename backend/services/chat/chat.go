@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -16,7 +15,9 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/vaanskii/vansify/db"
 	"github.com/vaanskii/vansify/models"
-	notifications "github.com/vaanskii/vansify/notifications"
+	"github.com/vaanskii/vansify/notifications"
+	chatHub "github.com/vaanskii/vansify/services/chat/hub"
+	"github.com/vaanskii/vansify/services/user"
 	"github.com/vaanskii/vansify/utils"
 )
 
@@ -28,7 +29,7 @@ var (
 			return true
 		},
 	}
-	hub = NewHub()
+	hub = chatHub.NewHub()
 )
 
 func generateChatID() (string, error) {
@@ -96,7 +97,6 @@ func CreateChat(c *gin.Context) {
     c.JSON(http.StatusOK, gin.H{"chat_id": chat.ChatID})
 }
 
-// WsHandler which is handling ws connections
 func ChatWsHandler(c *gin.Context) {
     chatID := c.Param("chatID")
     token := c.Query("token")
@@ -105,6 +105,7 @@ func ChatWsHandler(c *gin.Context) {
     token = strings.TrimSpace(token)
     log.Printf("Token after trimming: %s", token)
 
+    // Verify JWT token
     parsedToken, err := utils.VerifyJWT(token)
     if err != nil {
         log.Println("Invalid token:", err)
@@ -119,8 +120,10 @@ func ChatWsHandler(c *gin.Context) {
         return
     }
 
-    log.Printf("Token valid for user: %s", claims.Username)
+    senderUsername := claims.Username
+    log.Printf("Token valid for user: %s", senderUsername)
 
+    // Upgrade to WebSocket
     conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
     if err != nil {
         log.Println("WebSocket Upgrade error:", err)
@@ -132,11 +135,20 @@ func ChatWsHandler(c *gin.Context) {
     hub.AddConnection(conn)
     defer hub.RemoveConnection(conn)
 
+    // Retrieve chat users
     var chat models.Chat
     err = db.DB.QueryRow("SELECT user1, user2 FROM chats WHERE chat_id = ?", chatID).Scan(&chat.User1, &chat.User2)
     if err != nil {
         log.Println("Error querying chat:", err)
         return
+    }
+
+    // Determine recipient username
+    var recipientUsername string
+    if senderUsername == chat.User1 {
+        recipientUsername = chat.User2
+    } else {
+        recipientUsername = chat.User1
     }
 
     for {
@@ -146,19 +158,22 @@ func ChatWsHandler(c *gin.Context) {
             break
         }
 
+        log.Printf("Received message: %s", string(p))
+
         var incomingMessage models.Message
         if err := json.Unmarshal(p, &incomingMessage); err != nil {
-            log.Println("Error decoding incoming message:", err)
+            log.Printf("Error decoding incoming message: %v", err)
             continue
         }
 
         incomingMessage.ChatID = chatID
-        incomingMessage.Username = claims.Username
-        incomingMessage.Status = "sent" // Set initial status to 'sent'
+        incomingMessage.Username = senderUsername
+        incomingMessage.Status = "sent"
+        log.Printf("Message initial status set to %s", incomingMessage.Status)
 
-        // Fetch the profile picture URL for the user
+        // Fetch the profile picture URL for the sender
         var profilePicture string
-        err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", incomingMessage.Username).Scan(&profilePicture)
+        err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", senderUsername).Scan(&profilePicture)
         if err != nil {
             log.Println("Error querying profile picture:", err)
             profilePicture = ""
@@ -168,54 +183,77 @@ func ChatWsHandler(c *gin.Context) {
         result, execErr := db.DB.Exec("INSERT INTO messages (chat_id, message, username, file_url, status) VALUES (?, ?, ?, ?, ?)",
             incomingMessage.ChatID, incomingMessage.Message, incomingMessage.Username, incomingMessage.FileURL, incomingMessage.Status)
         if execErr != nil {
-            log.Println("DB Exec error:", execErr)
+            log.Printf("DB Exec error: %v", execErr)
+            continue
         }
 
         messageID, err := result.LastInsertId()
         if err != nil {
-            log.Println("Error retrieving last insert ID:", err)
+            log.Printf("Error retrieving last insert ID: %v", err)
             continue
         }
         incomingMessage.ID = int(messageID)
-        fmt.Printf("Message ID: %d\n", incomingMessage.ID)
+        log.Printf("Message ID: %d saved with status: %s", incomingMessage.ID, incomingMessage.Status)
 
-        // Check if the recipient is connected
-        var recipientUsername string
-        if claims.Username == chat.User1 {
-            recipientUsername = chat.User2
-        } else {
-            recipientUsername = chat.User1
+        // Check if the recipient is active before updating the status
+        recipientIsActive, err := user.IsUserActive(recipientUsername)
+        if err != nil {
+            log.Printf("Error querying active status for user chat.go %s: %v", recipientUsername, err)
+            recipientIsActive = false
         }
 
-        if notifications.IsUserConnected(recipientUsername) {
+        if recipientIsActive {
             incomingMessage.Status = "delivered"
-            _, err := db.DB.Exec("UPDATE messages SET status = ? WHERE id = ?", incomingMessage.Status, incomingMessage.ID)
+            _, err = db.DB.Exec("UPDATE messages SET status = ? WHERE id = ?", incomingMessage.Status, incomingMessage.ID)
             if err != nil {
-                log.Println("Error updating message status to delivered:", err)
+                log.Printf("Error updating message status to delivered for message ID %d: %v", incomingMessage.ID, err)
+            } else {
+                log.Printf("Message ID %d status updated to 'delivered' because recipient %s is active", incomingMessage.ID, recipientUsername)
             }
+        } else {
+            log.Printf("Recipient %s is not active. Message status remains as '%s'", recipientUsername, incomingMessage.Status)
+
+            // Pass recipientUsername instead of claims.Username
+            go UpdateStatusWhenUserBecomesActive(incomingMessage.ChatID, recipientUsername, incomingMessage.Username )
         }
 
+        // Send the real message ID back to the sender first
+        idMessage := map[string]interface{}{
+            "id":     incomingMessage.ID,
+            "status": incomingMessage.Status,
+            "type":   "MESSAGE_ID",
+        }
+        idMessageBytes, _ := json.Marshal(idMessage)
+        conn.WriteMessage(messageType, idMessageBytes)
+
+        // Prepare full message to send to clients
         fullMessage := struct {
             models.Message
             ProfilePicture string `json:"profile_picture"`
+            Receiver       string `json:"receiver"`
         }{
             Message:        incomingMessage,
             ProfilePicture: profilePicture,
+            Receiver:       recipientUsername,
         }
 
-        // Send the message back to the sender only
+        // Send the message back to the sender
         broadcastMessage, _ := json.Marshal(fullMessage)
         conn.WriteMessage(messageType, broadcastMessage)
+        log.Printf("Sent message ID %d back to sender", incomingMessage.ID)
 
+        // Broadcast the message to other connected clients
         hub.BroadcastMessage(conn, messageType, broadcastMessage)
+        log.Printf("Broadcasted message ID %d to other clients", incomingMessage.ID)
 
+        // Fetch the last message for notifications
         var lastMessage string
         err = db.DB.QueryRow("SELECT message FROM messages WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1", chatID).Scan(&lastMessage)
         if err != nil {
             log.Println("Error querying last message:", err)
         }
 
-        log.Println("last message", lastMessage)
+        log.Printf("Last message: %s", lastMessage)
 
         var recipientID int
         err = db.DB.QueryRow("SELECT id FROM users WHERE username = ?", recipientUsername).Scan(&recipientID)
@@ -223,8 +261,6 @@ func ChatWsHandler(c *gin.Context) {
             log.Println("Error querying recipient ID:", err)
         } else {
             notifications.NotifyNewMessage(int64(recipientID), incomingMessage)
-            log.Printf("Notification sent to user ID: %d for message: %s", recipientID, incomingMessage.Message)
-
             chatUnreadCount, err := notifications.GetUnreadChatMessagesCount(int64(recipientID), chatID)
             if err != nil {
                 log.Printf("Error getting unread message count for chat: %v", err)
@@ -233,16 +269,15 @@ func ChatWsHandler(c *gin.Context) {
                 if err != nil {
                     log.Printf("Error getting total unread message count: %v", err)
                 } else {
-                    // Broadcast the chat-specific unread count notification
                     chatNotificationMessage, _ := json.Marshal(map[string]interface{}{
                         "user_id":            recipientID,
                         "chat_id":            chatID,
                         "unread_count":       chatUnreadCount,
                         "total_unread_count": totalUnreadCount,
                         "message":            incomingMessage.Message,
-                        "user":               claims.Username,
-                        "profile_picture":     profilePicture,
-                        "sender":             claims.Username,
+                        "user":               senderUsername,
+                        "profile_picture":    profilePicture,
+                        "sender":             senderUsername,
                         "last_message_time":  time.Now().Format(time.RFC3339),
                         "last_message":       lastMessage,
                     })
@@ -253,7 +288,56 @@ func ChatWsHandler(c *gin.Context) {
     }
 }
 
+func UpdateStatusWhenUserBecomesActive(chatID string, recipientUsername string, senderUsername string) {
+    log.Printf("Updating status for chat %s, recipient %s, sender %s", chatID, recipientUsername, senderUsername)
 
+    var isActive bool
+    var lastActive sql.NullTime
+    var becomingInactive bool
+    err := db.DB.QueryRow("SELECT active, last_active, becoming_inactive FROM users WHERE username = ?", recipientUsername).Scan(&isActive, &lastActive, &becomingInactive)
+    if err != nil {
+        log.Printf("Error querying active status for user uswb %s: %v", recipientUsername, err)
+        return
+    }
+
+    if isActive && !lastActive.Valid {
+        rows, err := db.DB.Query("SELECT id FROM messages WHERE chat_id = ? AND username = ? AND status = 'sent'", chatID, senderUsername)
+        if err != nil {
+            log.Printf("Error querying messages for chat %s and sender %s: %v", chatID, senderUsername, err)
+            return
+        }
+        defer rows.Close()
+
+        messageIDs := []int{}
+        for rows.Next() {
+            var messageID int
+            if err := rows.Scan(&messageID); err != nil {
+                log.Printf("Error scanning message ID: %v", err)
+                continue
+            }
+            messageIDs = append(messageIDs, messageID)
+        }
+
+        result, err := db.DB.Exec("UPDATE messages SET status = 'delivered' WHERE chat_id = ? AND username = ? AND status = 'sent'", chatID, senderUsername)
+        if err != nil {
+            log.Printf("Error updating message statuses for chat %s and user %s: %v", chatID, senderUsername, err)
+        } else {
+            rowsAffected, _ := result.RowsAffected()
+            log.Printf("Updated %d message(s) to 'delivered' in chat %s for sender %s", rowsAffected, chatID, senderUsername)
+
+            statusUpdateMessage := map[string]interface{}{
+                "type":       "STATUS_UPDATE",
+                "chat_id":    chatID,
+                "username":   senderUsername,
+                "status":     "delivered",
+                "message_ids": messageIDs,
+            }
+            broadcastMessage, _ := json.Marshal(statusUpdateMessage)
+            hub.BroadcastMessage(nil, websocket.TextMessage, broadcastMessage)
+            log.Printf("Broadcasted status update for chat %s and user %s: %s", chatID, senderUsername, broadcastMessage)
+        }
+    }
+}
 
 func GetChatHistory(c *gin.Context) {
     chatID := c.Param("chatID")
@@ -409,7 +493,7 @@ func DeleteMessage(c *gin.Context) {
     messageID := c.Param("messageID")
 
     var message models.Message
-    err := db.DB.QueryRow("SELECT id, chat_id, username FROM messages WHERE id = ?", messageID).Scan(&message.ID, &message.ChatID, &message.Username)
+    err := db.DB.QueryRow("SELECT id, chat_id, username, status FROM messages WHERE id = ?", messageID).Scan(&message.ID, &message.ChatID, &message.Username, &message.Status)
     if err != nil {
         log.Println("Query error: Incorrect message ID:", err)
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Incorrect message ID"})
@@ -440,13 +524,51 @@ func DeleteMessage(c *gin.Context) {
     }
     log.Printf("Last message after deletion: '%s' at '%s'", lastMessage, lastMessageTime)
 
+    // Identify the recipient of the chat
+    var recipientUsername string
+    var chat models.Chat
+    err = db.DB.QueryRow("SELECT user1, user2 FROM chats WHERE chat_id = ?", message.ChatID).Scan(&chat.User1, &chat.User2)
+    if err != nil {
+        log.Println("Error querying chat users:", err)
+    } else {
+        if username == chat.User1 {
+            recipientUsername = chat.User2
+        } else {
+            recipientUsername = chat.User1
+        }
+    }
+
+    // Fetch recipient userID
+    var recipientUserID int64
+    err = db.DB.QueryRow("SELECT id FROM users WHERE username = ?", recipientUsername).Scan(&recipientUserID)
+    if err != nil {
+        log.Println("Error fetching recipient user ID:", err)
+    }
+
+    // Delete chat notification for the recipient if exists
+    _, err = db.DB.Exec("DELETE FROM chat_notifications WHERE user_id = ? AND chat_id = ?", recipientUserID, message.ChatID)
+    if err != nil {
+        log.Println("Error deleting chat notification for recipient:", err)
+    } else {
+        log.Println("Chat notification for recipient deleted successfully")
+    }
+
+    // Call GetTotalUnreadMessageCount to update the unread message count for the recipient
+    totalUnreadCount, err := notifications.GetTotalUnreadMessageCount(recipientUserID)
+    if err != nil {
+        log.Println("Error getting total unread message count for recipient:", err)
+    } else {
+        log.Printf("Total unread message count for recipient: %d", totalUnreadCount)
+    }
+
     // Broadcast deletion to all connected clients
     deleteMessage := map[string]interface{}{
-        "type":             "MESSAGE_DELETED",
-        "message_id":       messageID,
-        "chat_id":          message.ChatID,
-        "last_message":     lastMessage,
+        "type":              "MESSAGE_DELETED",
+        "message_id":        messageID,
+        "chat_id":           message.ChatID,
+        "last_message":      lastMessage,
         "last_message_time": lastMessageTime,
+        "status":            message.Status,
     }
     broadcastMessage, _ := json.Marshal(deleteMessage)
     log.Printf("Broadcasting delete message: %v", deleteMessage)
@@ -454,3 +576,4 @@ func DeleteMessage(c *gin.Context) {
 
     c.JSON(http.StatusOK, gin.H{"message": "Message deleted successfully"})
 }
+

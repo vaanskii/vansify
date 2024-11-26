@@ -11,7 +11,9 @@ import (
 	"github.com/lpernett/godotenv"
 	"github.com/vaanskii/vansify/db"
 	"github.com/vaanskii/vansify/models"
-	"github.com/vaanskii/vansify/services/user"
+	"github.com/vaanskii/vansify/services/chat"
+	activeUsers "github.com/vaanskii/vansify/services/user"
+
 	"github.com/vaanskii/vansify/utils"
 	"gopkg.in/gomail.v2"
 )
@@ -138,7 +140,6 @@ func RegisterUser(c *gin.Context) {
     c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully! Please verify your email."})
 }
 
-
 // LoginUser handles user login
 func LoginUser(c *gin.Context) {
     log.Println("LoginUser called")
@@ -156,7 +157,6 @@ func LoginUser(c *gin.Context) {
 
     log.Printf("Login request received for username: %s", request.Username)
 
-    // Check if user exists
     row := db.DB.QueryRow("SELECT id, username, email, password, verified FROM users WHERE username = ?", request.Username)
     var dbUser models.User
     if err := row.Scan(&dbUser.ID, &dbUser.Username, &dbUser.Email, &dbUser.Password, &dbUser.Verified); err != nil {
@@ -200,7 +200,7 @@ func LoginUser(c *gin.Context) {
     }
 
     log.Printf("Updating active status for user: %s", dbUser.Username)
-    _, err = db.DB.Exec("UPDATE users SET active = true WHERE username = ?", dbUser.Username)
+    _, err = db.DB.Exec("UPDATE users SET active = true, last_active = NULL WHERE username = ?", dbUser.Username)
     if err != nil {
         log.Println("Error updating user active status:", err)
     }
@@ -216,19 +216,59 @@ func LoginUser(c *gin.Context) {
         "active": true,
     })
 
-    log.Println("Broadcasting active users")
-    go user.FetchActiveUsersAndBroadcast(db.DB)
-}
+    // Trigger status update for messages
+    go func() {
+        _, err := db.DB.Exec("UPDATE users SET active = true, last_active = NULL WHERE email = ?", dbUser.Email)
+        if err != nil {
+            log.Println("Error updating user active status:", err)
+            return
+        }
 
+        // Fetch active users and broadcast
+        activeUsers.FetchActiveUsersAndBroadcast(db.DB)
+
+        // Update message statuses for all chats involving the user
+        rows, err := db.DB.Query("SELECT chat_id, user1, user2 FROM chats WHERE user1 = ? OR user2 = ?", dbUser.Username, dbUser.Username)
+        if err != nil {
+            log.Println("Error querying chats for user:", err)
+            return
+        }
+        defer rows.Close()
+
+        for rows.Next() {
+            var chatID string
+            var user1 string
+            var user2 string
+            if err := rows.Scan(&chatID, &user1, &user2); err != nil {
+                log.Println("Error scanning chat ID:", err)
+                continue
+            }
+
+            // Determine the other user in the chat
+            var otherUser string
+            if dbUser.Username == user1 {
+                otherUser = user2
+            } else {
+                otherUser = user1
+            }
+
+            // go activeUsers.UpdateStatusWhenUserBecomesActive(chatID,  dbUser.Username, otherUser)
+            go chat.UpdateStatusWhenUserBecomesActive(chatID, dbUser.Username, otherUser)
+        }
+    }()
+
+    log.Println("Broadcasting active users")
+    go activeUsers.FetchActiveUsersAndBroadcast(db.DB)
+}
 
 func LogoutUser(c *gin.Context) {
     claims, exists := c.Get("claims")
-    if !exists {
+    if (!exists) {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
         return
     }
     customClaims, ok := claims.(*utils.CustomClaims)
-    if !ok {
+    if (!ok) {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
         return
     }
@@ -236,9 +276,9 @@ func LogoutUser(c *gin.Context) {
 
     log.Printf("Logout request received for username: %s", username)
 
-    // Update the user's active status to false
-    _, err := db.DB.Exec("UPDATE users SET active = ? WHERE username = ?", false, username)
-    if err != nil {
+    // Update the user's active status to false and set last_active to current timestamp
+    _, err := db.DB.Exec("UPDATE users SET active = ?, last_active = NOW() WHERE username = ?", false, username)
+    if (err != nil) {
         log.Printf("Error updating user active status for username %s: %v", username, err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
         return
@@ -250,9 +290,8 @@ func LogoutUser(c *gin.Context) {
     c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 
     log.Println("Broadcasting active users")
-    go user.FetchActiveUsersAndBroadcast(db.DB)
+    go activeUsers.FetchActiveUsersAndBroadcast(db.DB)
 }
-
 
 
 func DeleteUser(c *gin.Context) {

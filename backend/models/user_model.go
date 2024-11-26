@@ -7,20 +7,22 @@ import (
 )
 
 type User struct {
-	ID 		   		 int64  	 `json:"id"`
-	Username   		 string 	 `json:"username"`
-	Password   		 string 	 `json:"password"`
-	Email 	   		 string 	 `json:"email"`
-	ProfilePicture    string      `json:"profile_picture"`
-	Gender 			 string   	 `json:"gender"`
-	Verified 		  bool 	  	  `json:"verified"`
-	OauthUser        bool         `json:"oauth_user"`
-	CreatedAt  		 time.Time   `json:"created_at"`
-	Followers        []User      `json:"followers"`
-	Followings       []User      `json:"followings"`
-	FollowersCount   int64       `json:"followers_count"`
-	FollowingsCount  int64       `json:"followings_count"`
-	Active           bool        `json:"active"`
+    ID               int64       `json:"id"`
+    Username         string      `json:"username"`
+    Password         string      `json:"password"`
+    Email            string      `json:"email"`
+    ProfilePicture    string      `json:"profile_picture"`
+    Gender           string      `json:"gender"`
+    Verified          bool        `json:"verified"`
+    OauthUser        bool        `json:"oauth_user"`
+    CreatedAt        time.Time   `json:"created_at"`
+    Followers        []User      `json:"followers"`
+    Followings       []User      `json:"followings"`
+    FollowersCount   int64       `json:"followers_count"`
+    FollowingsCount  int64       `json:"followings_count"`
+    Active           bool        `json:"active"`
+    LastActive       time.Time   `json:"last_active"`
+    BecomingInactive bool        `json:"becoming_inactive"`
 }
 
 // HashPassword hashes the user's password

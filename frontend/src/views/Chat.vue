@@ -26,10 +26,10 @@
         </div>
         <div class="message-footer">
           <span v-if="message.isOwnMessage">
-            <span v-if="message.status === 'sent'">(Sent)</span> 
-            <span v-if="message.status === 'delivered'">(Delivered)</span>
+            <span v-if="message.status">({{ message.status }})</span> 
+            <!-- <span v-if="message.status === 'delivered'">(Delivered)</span>
             <span v-if="message.status === 'read'">(Read)</span>
-            <span v-if="message.status === 'sending'">(Sending...)</span>
+            <span v-if="message.status === 'sending'">(Sending...)</span> -->
           </span>
           <span>{{ formatTime(message.created_at) }}</span>
           <button v-if="message.isOwnMessage" @click="deleteMessage(message.id)" class="delete-button">Delete</button>
@@ -51,6 +51,7 @@ import axios from 'axios';
 import { useRoute, useRouter } from 'vue-router';
 import { userStore } from '@/stores/user';
 import emitter from '@/eventBus';
+import notify from '@/utils/notify';
 
 const apiUrl = import.meta.env.VITE_WS_URL;
 const messages = ref([]);
@@ -146,17 +147,14 @@ const connectWebSocket = (chatID, token) => {
   ws = new WebSocket(wsURL);
 
   ws.onopen = () => {
-    console.log('WebSocket connection established');
     isConnected.value = true;
     retryAttempt = 0;
     isLoading.value = false;
 
-    // Resend unsent messages
     const unsentMessages = messages.value.filter(msg => msg.status === false && msg.isOwnMessage);
     unsentMessages.forEach(message => {
       ws.send(JSON.stringify({ message: message.message, username }));
       message.status = true;
-      console.log('Resent message:', message);
     });
     removeOfflineMessages();
   };
@@ -167,56 +165,72 @@ const connectWebSocket = (chatID, token) => {
   };
 
   ws.onclose = () => {
-    console.log('WebSocket connection closed');
     isConnected.value = false;
     if (retryAttempt < maxRetries) {
       setTimeout(() => {
         retryAttempt++;
-        console.log(`Reconnecting... Attempt ${retryAttempt}`);
         connectWebSocket(chatID, token);
       }, Math.min(1000 * Math.pow(2, retryAttempt), 30000));
     } else {
       console.error('Max reconnection attempts reached.');
     }
   };
-
   ws.onmessage = (event) => {
-    const message = JSON.parse(event.data);
-    if (message.type === 'MESSAGE_DELETED') {
-        const index = messages.value.findIndex(msg => msg.id == message.message_id);
-        if (index !== -1) {
-            messages.value.splice(index, 1);
+  const message = JSON.parse(event.data);
+  message.message_id = message.message_id || message.id;
+
+  switch (message.type) {
+    case 'MESSAGE_DELETED':
+      const deleteIndex = messages.value.findIndex(msg => msg.id == message.message_id);
+      if (deleteIndex !== -1) {
+        messages.value.splice(deleteIndex, 1);
+      }
+      break;
+
+    case 'STATUS_UPDATE':
+    if (message.chat_id === route.params.chatID && message.message_ids) {
+      message.message_ids.forEach((msgID) => {
+        const updateIndex = messages.value.findIndex(msg => msg.id == msgID);
+        if (updateIndex !== -1) {
+          messages.value[updateIndex].status = message.status;
+        } else {
+          console.log(`Message ID ${msgID} not found`);
         }
+      });
     } else {
-        if (message.chat_id === route.params.chatID) {
-            if (message.id && message.username !== username) {
-                if (!messages.value.some(msg => msg.id == message.id)) {
-                    console.log(`New message received: ${message.message}`);
-                    messages.value.push({
-                        ...message,
-                        isOwnMessage: message.username === username,
-                        profile_picture: `/${message.profile_picture}`,
-                        last_message: message.last_message,
-                        file_url: message.file_url
-                    });
-                }
-            } else {
-                const index = messages.value.findIndex(msg => msg.id == message.tempID);
-                if (index !== -1) {
-                    console.log(`Updating message ID ${message.tempID} with new ID ${message.id} and status ${message.status}`);
-                    messages.value[index] = { ...messages.value[index], id: message.id, status: message.status };
-                }
-            }
+      console.log(`Chat ID mismatch or no message_ids in STATUS_UPDATE for chat ${message.chat_id}`);
+    }
+    break;
+
+    default:
+      if (message.chat_id === route.params.chatID) {
+        if (message.username === store.user.username) {
+          const ownIndex = messages.value.findIndex(msg => msg.id == message.message_id);
+          if (ownIndex !== -1) {
+            messages.value[ownIndex].status = message.status;
+          } else {
+            console.log(`Message ID ${message.message_id} not found`);
+          }
+        } else {
+          if (!messages.value.some(msg => msg.id == message.message_id)) {
+            messages.value.push({
+              ...message,
+              isOwnMessage: message.username === store.user.username,
+              profile_picture: `/${message.profile_picture}`,
+              last_message: message.last_message,
+              file_url: message.file_url,
+              receiver: message.receiver,
+            });
+          }
         }
-    }
-
+      }
+      break;
+  }
     if (route.params.chatID === chatID) {
-        markChatNotificationsAsRead(chatID);
+      markChatNotificationsAsRead(chatID);
     }
+  };
 };
-
-};
-
 
 const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
   try {
@@ -354,73 +368,66 @@ const onFileSelected = (event) => {
   selectedFile.value = event.target.files[0];
 };
 
-const uploadFile = async (file, tempMessageID) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('metadata', new Blob([JSON.stringify({
-        name: file.name,
-        parents: [route.params.chatID]
-    })], { type: 'application/json' }));
+const uploadFile = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('metadata', new Blob([JSON.stringify({
+      name: file.name,
+      parents: [route.params.chatID]
+  })], { type: 'application/json' }));
 
-    try {
-        const response = await axios.post(`/v1/upload/chat/${route.params.chatID}`, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-                Authorization: `Bearer ${store.user.access}`
-            },
-            withCredentials: false
-        });
-        if (response.data) {
-            const index = messages.value.findIndex(msg => msg.id === tempMessageID);
-            if (index !== -1) {
-                messages.value[index] = {
-                    ...messages.value[index],
-                    file_url: response.data.fileURL,
-                    message: "Sent picture",
-                    status: 'sending', // Keep status as 'sending'
-                };
-                // Send the updated message with the file URL
-                ws.send(JSON.stringify({ ...messages.value[index], tempID: tempMessageID }));
-            }
-        }
-    } catch (error) {
-        console.error("Error uploading file:", error);
-        const index = messages.value.findIndex(msg => msg.id === tempMessageID);
-        if (index !== -1) {
-            messages.value[index].status = 'sending';
-        }
+  try {
+    const response = await axios.post(`/v1/upload/chat/${route.params.chatID}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        Authorization: `Bearer ${store.user.access}`
+      },
+      withCredentials: false
+    });
+
+    if (response.data) {
+      return response.data.fileURL;
+    } else {
+      throw new Error("File upload failed");
     }
-    saveOfflineMessages();
+  } catch (error) {
+    console.error("Error uploading file:", error);
+    throw error;
+  }
 };
-
-
 
 const sendMessage = async () => {
   if (!newMessage.value && !selectedFile.value) {
     return;
   }
 
+  let messageToSend = {
+    username,
+    message: newMessage.value || "Sent a file",
+    created_at: new Date().toISOString(),
+    isOwnMessage: true,
+  };
+
   if (selectedFile.value) {
-    const file = selectedFile.value;
-    const tempFileMessage = {
-      id: Date.now(),
-      username,
-      file_url: URL.createObjectURL(file),
-      created_at: new Date().toISOString(),
-      isOwnMessage: true,
-      status: 'sending', // Update to 'sending' instead of false
-    };
-    messages.value.push(tempFileMessage);
-    const tempMessageID = tempFileMessage.id;
+    notify("Senting image...", "info");
+    try {
+      const fileURL = await uploadFile(selectedFile.value);
+      messageToSend.file_url = fileURL;
+      selectedFile.value = null;
+      fileInput.value.value = "";
+      notify("Image sented!", "success");
+    } catch (error) {
+      notify("Failed to upload file.", "error");
+      return;
+    }
+  }
 
-    await uploadFile(file, tempMessageID);
-    selectedFile.value = null;
-    fileInput.value.value = "";
-
+  if (ws && isConnected.value) {
+    ws.send(JSON.stringify(messageToSend));
     const receiveResponse = new Promise((resolve, reject) => {
       const responseHandler = (event) => {
         const response = JSON.parse(event.data);
-        if (response.id) {
+        if (response.type === 'MESSAGE_ID' && response.id) {
           ws.removeEventListener('message', responseHandler);
           resolve(response.id);
         } else {
@@ -432,60 +439,23 @@ const sendMessage = async () => {
 
     try {
       const messageID = await receiveResponse;
-      const index = messages.value.findIndex(msg => msg.id === tempMessageID);
-      if (index !== -1) {
-        messages.value[index] = { ...messages.value[index], id: messageID, status: 'sent' };
-      }
+      messageToSend.id = messageID;
+      messageToSend.status = 'sent';
+      messages.value.push(messageToSend);
     } catch (error) {
       console.error("Error receiving message ID:", error);
     }
   } else {
-    const tempTextMessage = {
-      id: Date.now(),
-      username,
-      message: newMessage.value,
-      created_at: new Date().toISOString(),
-      isOwnMessage: true,
-      status: 'sending', // Update to 'sending' instead of false
-    };
-    messages.value.push(tempTextMessage);
-    const tempMessageID = tempTextMessage.id;
-
-    if (ws && isConnected.value) {
-      ws.send(JSON.stringify(tempTextMessage));
-      const receiveResponse = new Promise((resolve, reject) => {
-        const responseHandler = (event) => {
-          const response = JSON.parse(event.data);
-          if (response.id) {
-            ws.removeEventListener('message', responseHandler);
-            resolve(response.id);
-          } else {
-            reject("Message ID not received");
-          }
-        };
-        ws.addEventListener('message', responseHandler);
-      });
-
-      try {
-        const messageID = await receiveResponse;
-        const index = messages.value.findIndex(msg => msg.id === tempMessageID);
-        if (index !== -1) {
-          messages.value[index] = { ...tempTextMessage, id: messageID, status: 'sent' };
-        }
-      } catch (error) {
-        console.error("Error receiving message ID:", error);
-      }
-    } else {
-      saveOfflineMessages();
-    }
-    newMessage.value = '';
-    nextTick(scrollToBottom);
+    saveOfflineMessages();
   }
+  newMessage.value = '';
+  nextTick(scrollToBottom);
 };
+
 
 watch(isConnected, (newVal) => {
   if (newVal) {
-    const unsentMessages = messages.value.filter(msg => msg.status === 'sending' && msg.isOwnMessage);
+    const unsentMessages = messages.value.filter(msg => msg.status === 'sent' && msg.isOwnMessage);
     unsentMessages.forEach(message => {
       ws.send(JSON.stringify(message));
       message.status = 'sent';
