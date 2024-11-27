@@ -179,14 +179,3 @@ func FetchActiveUsersAndBroadcast(db *sql.DB) {
     log.Println("Broadcast complete")
 }
 
-// IsUserActive checks if a user is currently active
-func IsUserActive(username string) (bool, error) {
-    var isActive bool
-    err := db.DB.QueryRow("SELECT active FROM users WHERE username = ?", username).Scan(&isActive)
-    if err != nil {
-        log.Printf("Error querying active status for user isuseractive %s: %v", username, err)
-        return false, err
-    }
-    log.Printf("User %s active status: %v", username, isActive)
-    return isActive, nil
-}

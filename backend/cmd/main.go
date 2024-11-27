@@ -88,7 +88,7 @@ func main() {
         v1.GET("/chat/:chatID/history", auth.AuthMiddleware(), chat.GetChatHistory)
         v1.GET("/check-chat/:user1/:user2", auth.AuthMiddleware(), chat.CheckChatExists)
         v1.GET("/notifications/chat/unread", auth.AuthMiddleware(), notifications.GetUnreadChatNotifications)
-        v1.POST("/notifications/chat/mark-read/:chatID", auth.AuthMiddleware(), notifications.MarkChatNotificationsAsRead)
+        v1.POST("/notifications/chat/mark-read/:chatID", auth.AuthMiddleware(), chat.MarkChatNotificationsAsRead)
         v1.DELETE("/chat/:chatID", auth.AuthMiddleware(), chat.DeleteChat)
         v1.DELETE("/message/:messageID", auth.AuthMiddleware(), chat.DeleteMessage)
 

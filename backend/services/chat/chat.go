@@ -132,6 +132,11 @@ func ChatWsHandler(c *gin.Context) {
     log.Println("WebSocket connection established for chatID:", chatID)
     defer conn.Close()
 
+    cm := user.ChatManagerInstance
+
+    cm.AddUserToChat(chatID, senderUsername)
+    defer cm.RemoveUserFromChat(chatID, senderUsername)
+
     hub.AddConnection(conn)
     defer hub.RemoveConnection(conn)
 
@@ -195,26 +200,18 @@ func ChatWsHandler(c *gin.Context) {
         incomingMessage.ID = int(messageID)
         log.Printf("Message ID: %d saved with status: %s", incomingMessage.ID, incomingMessage.Status)
 
-        // Check if the recipient is active before updating the status
-        recipientIsActive, err := user.IsUserActive(recipientUsername)
-        if err != nil {
-            log.Printf("Error querying active status for user chat.go %s: %v", recipientUsername, err)
-            recipientIsActive = false
-        }
-
-        if recipientIsActive {
-            incomingMessage.Status = "delivered"
+        // Check if the recipient is in the chat before updating the status
+        if cm.IsUserInChat(chatID, recipientUsername) {
+            incomingMessage.Status = "read"
             _, err = db.DB.Exec("UPDATE messages SET status = ? WHERE id = ?", incomingMessage.Status, incomingMessage.ID)
             if err != nil {
-                log.Printf("Error updating message status to delivered for message ID %d: %v", incomingMessage.ID, err)
+                log.Printf("Error updating message status to read for message ID %d: %v", incomingMessage.ID, err)
             } else {
-                log.Printf("Message ID %d status updated to 'delivered' because recipient %s is active", incomingMessage.ID, recipientUsername)
+                log.Printf("Message ID %d status updated to 'read' because recipient %s is in chat", incomingMessage.ID, recipientUsername)
             }
         } else {
-            log.Printf("Recipient %s is not active. Message status remains as '%s'", recipientUsername, incomingMessage.Status)
-
-            // Pass recipientUsername instead of claims.Username
-            go UpdateStatusWhenUserBecomesActive(incomingMessage.ChatID, recipientUsername, incomingMessage.Username )
+            log.Printf("Recipient %s is not in chat. Message status remains as '%s'", recipientUsername, incomingMessage.Status)
+            go UpdateStatusWhenUserBecomesActive(incomingMessage.ChatID, recipientUsername, incomingMessage.Username)
         }
 
         // Send the real message ID back to the sender first
@@ -288,6 +285,7 @@ func ChatWsHandler(c *gin.Context) {
     }
 }
 
+
 func UpdateStatusWhenUserBecomesActive(chatID string, recipientUsername string, senderUsername string) {
     log.Printf("Updating status for chat %s, recipient %s, sender %s", chatID, recipientUsername, senderUsername)
 
@@ -338,6 +336,78 @@ func UpdateStatusWhenUserBecomesActive(chatID string, recipientUsername string, 
         }
     }
 }
+
+
+func MarkChatNotificationsAsRead(c *gin.Context) {
+    claims, exists := c.Get("claims")
+    if !exists {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+        return
+    }
+    customClaims, ok := claims.(*utils.CustomClaims)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+        return
+    }
+
+    username := customClaims.Username
+    chatID := c.Param("chatID")
+
+    // Ensure user is part of the chat
+    var chat models.Chat
+    err := db.DB.QueryRow("SELECT user1, user2 FROM chats WHERE chat_id = ?", chatID).Scan(&chat.User1, &chat.User2)
+    if err != nil {
+        log.Printf("Error querying chat: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error querying chat"})
+        return
+    }
+
+    // Determine recipient username
+    var recipientUsername string
+    if username == chat.User1 {
+        recipientUsername = chat.User2
+    } else {
+        recipientUsername = chat.User1
+    }
+
+    var userID int64
+    err = db.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID)
+    if err != nil {
+        log.Printf("Error retrieving user ID: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving user ID"})
+        return
+    }
+
+    // Update message statuses to "read" only if the user is the recipient
+    _, err = db.DB.Exec("UPDATE messages SET status = 'read' WHERE chat_id = ? AND username = ?", chatID, recipientUsername)
+    if err != nil {
+        log.Printf("Error updating message statuses to read: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error updating message statuses to read"})
+        return
+    }
+
+    // Delete notifications for the chat
+    _, err = db.DB.Exec("DELETE FROM chat_notifications WHERE user_id = ? AND chat_id = ?", userID, chatID)
+    if err != nil {
+        log.Printf("Error deleting notifications for chat: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting notifications for chat"})
+        return
+    }
+
+    // Broadcast the status update to all connected clients
+    statusUpdateMessage := map[string]interface{}{
+        "type":    "STATUS_UPDATE_READ",
+        "chat_id": chatID,
+        "status":  "read",
+        "username": username,
+    }
+    broadcastMessage, _ := json.Marshal(statusUpdateMessage)
+    hub.BroadcastMessage(nil, websocket.TextMessage, broadcastMessage)
+    log.Printf("Broadcasted status update for chat %s: %s", chatID, broadcastMessage)
+
+    c.JSON(http.StatusOK, gin.H{"message": "Messages marked as read and notifications deleted"})
+}
+
 
 func GetChatHistory(c *gin.Context) {
     chatID := c.Param("chatID")

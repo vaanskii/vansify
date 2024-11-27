@@ -73,6 +73,7 @@ const selectedFile = ref(null);
 const loadingOlderMessages = ref(false);
 const hasMoreMessages = ref(true);
 const wsConst = import.meta.env.VITE_WS;
+let notificationsRead = false;
 
 const goToProfile = (username) => {
   router.push({ name: 'userprofile', params: { username }})
@@ -175,11 +176,18 @@ const connectWebSocket = (chatID, token) => {
       console.error('Max reconnection attempts reached.');
     }
   };
-  ws.onmessage = (event) => {
+
+ws.onmessage = (event) => {
   const message = JSON.parse(event.data);
   message.message_id = message.message_id || message.id;
 
   switch (message.type) {
+    case 'MESSAGE_ID':
+      // Handle the message ID response to avoid the error
+      const messageId = message.id;
+      console.log(`Received message ID: ${messageId}`);
+      break;
+
     case 'MESSAGE_DELETED':
       const deleteIndex = messages.value.findIndex(msg => msg.id == message.message_id);
       if (deleteIndex !== -1) {
@@ -188,19 +196,35 @@ const connectWebSocket = (chatID, token) => {
       break;
 
     case 'STATUS_UPDATE':
-    if (message.chat_id === route.params.chatID && message.message_ids) {
-      message.message_ids.forEach((msgID) => {
-        const updateIndex = messages.value.findIndex(msg => msg.id == msgID);
-        if (updateIndex !== -1) {
-          messages.value[updateIndex].status = message.status;
-        } else {
-          console.log(`Message ID ${msgID} not found`);
-        }
-      });
-    } else {
-      console.log(`Chat ID mismatch or no message_ids in STATUS_UPDATE for chat ${message.chat_id}`);
-    }
-    break;
+      if (message.chat_id === route.params.chatID && message.message_ids) {
+        message.message_ids.forEach((msgID) => {
+          const updateIndex = messages.value.findIndex(msg => msg.id == msgID);
+          if (updateIndex !== -1) {
+            messages.value[updateIndex].status = message.status;
+            console.log(`Message status updated to ${message.status} for message ID ${msgID}`);
+          } else {
+            console.log(`Message ID ${msgID} not found`);
+          }
+        });
+      } else {
+        console.log(`Chat ID mismatch or no message_ids in STATUS_UPDATE for chat ${message.chat_id}`);
+      }
+      break;
+
+    case 'STATUS_UPDATE_READ':
+      if (message.chat_id === route.params.chatID && message.username !== store.user.username) {
+        messages.value.forEach((msg) => {
+          if (msg.status !== 'read') {
+            msg.status = 'read';
+            console.log(`Message status updated to read for chat ${message.chat_id}`);
+          }
+        });
+      } else if (message.chat_id !== route.params.chatID) {
+        console.log(`Chat ID mismatch in STATUS_UPDATE_READ for chat ${message.chat_id}`);
+      } else {
+        console.log(`STATUS_UPDATE_READ received for sender's own message, no update needed`);
+      }
+      break;
 
     default:
       if (message.chat_id === route.params.chatID) {
@@ -226,11 +250,15 @@ const connectWebSocket = (chatID, token) => {
       }
       break;
   }
-    if (route.params.chatID === chatID) {
-      markChatNotificationsAsRead(chatID);
-    }
-  };
+
+  if (route.params.chatID === message.chat_id && message.username !== store.user.username && !notificationsRead) {
+    markChatNotificationsAsRead(message.chat_id);
+    notificationsRead = true; 
+  }
 };
+
+};
+
 
 const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
   try {
@@ -248,7 +276,7 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
       const newMessages = response.data.map(message => ({
         ...message,
         isOwnMessage: message.username === username,
-        status: message.status, // Ensure status is correctly assigned
+        status: message.status,
         time: new Date(message.created_at), 
         profile_picture: `/${message.profile_picture}`
       }));
@@ -283,7 +311,6 @@ const markChatNotificationsAsRead = async (chatID) => {
       }
     });
 
-    // Update messages status locally to "read"
     messages.value.forEach(message => {
       if (message.chat_id === chatID && message.username !== username) {
         message.status = 'read';
@@ -339,7 +366,7 @@ onMounted(async () => {
     await fetchChatHistory(chatID);
     chatUser.value = route.query.user || 'Unknown';
     connectWebSocket(chatID, token);
-    await markChatNotificationsAsRead(chatID);
+    notificationsRead = false;
 
     setInterval(updateMessageTimes, 60000);
     nextTick(scrollToBottom);
