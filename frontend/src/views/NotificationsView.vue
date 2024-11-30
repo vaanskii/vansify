@@ -19,31 +19,33 @@
   </div>
 </template>
 
-
 <script setup>
-import { onMounted, onUnmounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { userStore } from '@/stores/user';
 import { useNotificationStore } from '@/stores/notificationStore';
 import emitter from '@/eventBus';
 
 const store = userStore();
 const notificationStore = useNotificationStore();
+const intervalId = ref(null);
 
 onMounted(() => {
   if (store.user.isAuthenticated) {
-    if (notificationStore.notifications.length === 0) {
-      notificationStore.fetchNotifications();
-    }
-    setInterval(notificationStore.updateMessageTimes, 60000);
+    notificationStore.fetchNotifications();
+    intervalId.value = setInterval(notificationStore.updateMessageTimes, 60000);
   }
+
+  emitter.on('notification-updated', notificationStore.fetchNotifications);
+
 });
 
 onUnmounted(() => {
-  emitter.off('notification-updated');
+  if (intervalId.value) {
+    clearInterval(intervalId.value);
+  }
+  emitter.off('notification-updated', notificationStore.fetchNotifications);
 });
 </script>
-
 
 <style scoped>
 .unread {

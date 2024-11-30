@@ -1,11 +1,11 @@
-// appNotification.js
+//chatNotification.js
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import emitter from '@/eventBus';
 import notify from '@/utils/notify';
 import { userStore } from '@/stores/user';
 
-export const useNotificationStore = defineStore('notifications', () => {
+export const useChatNotificationStore = defineStore('chatNotifications', () => {
   const ws = ref(null);
   const apiUrl = import.meta.env.VITE_WS_URL;
   const wsConst = import.meta.env.VITE_WS;
@@ -30,33 +30,33 @@ export const useNotificationStore = defineStore('notifications', () => {
 
   const connectWebSocket = () => {
     if (store.user.isAuthenticated && !ws.value) {
-      const wsUrl = `${wsConst}//${apiUrl}/v1/notifications/ws?token=${encodeURIComponent(store.user.access)}`;
+      const wsUrl = `${wsConst}//${apiUrl}/v1/chat-notifications/ws?token=${encodeURIComponent(store.user.access)}`;
       ws.value = new WebSocket(wsUrl);
 
       ws.value.onopen = () => {
         reconnectAttempts = 0;
         reconnecting = false;
         if (import.meta.env.MODE === 'development') {
-          console.log('WebSocket connection established in notifications store');
+          console.log('WebSocket connection established in chat notifications store');
         }
         if (!initialConnection) {
           notify('Connected.', 'success', 3000);
         }
         initialConnection = false;
-        emitter.emit('global-ws-open');
+        emitter.emit('chat-ws-open');
       };
 
       ws.value.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        console.log("recevied data", event.data)
-        emitter.emit('global-ws-message', data);
+        console.log("Received chat notification data", event.data);
+        emitter.emit('chat-ws-message', data);
       };
 
       ws.value.onerror = (error) => {
         if (import.meta.env.MODE === 'development') {
-          console.error('WebSocket error:', error);
+          console.error('WebSocket error in chat notifications store:', error);
         }
-        emitter.emit('global-ws-error', error);
+        emitter.emit('chat-ws-error', error);
         if (!reconnecting && store.user.isAuthenticated) {
           notify('Something went wrong, please try again later...', 'error', 3000);
           reconnecting = true;
@@ -65,7 +65,7 @@ export const useNotificationStore = defineStore('notifications', () => {
 
       ws.value.onclose = () => {
         if (import.meta.env.MODE === 'development') {
-          console.log('WebSocket connection closed in notifications store');
+          console.log('WebSocket connection closed in chat notifications store');
         }
         if (store.user.isAuthenticated) {
           ws.value = null;
@@ -77,7 +77,7 @@ export const useNotificationStore = defineStore('notifications', () => {
         } else {
           reconnecting = false;
         }
-        emitter.emit('global-ws-close');
+        emitter.emit('chat-ws-close');
       };
     }
   };

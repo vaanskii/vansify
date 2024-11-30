@@ -100,6 +100,7 @@ func FollowUser(c *gin.Context) {
     notificationMessage := map[string]interface{}{
         "unread_notification_count": notificationCount,
         "sender": followerUsername,
+        "receiver": followingUsername,
     }
 
     notificationJSON, err := json.Marshal(notificationMessage)
@@ -109,7 +110,7 @@ func FollowUser(c *gin.Context) {
         return
     }
 
-    notifications.GlobalNotificationHub.BroadcastNotification(notificationJSON)
+    notifications.GlobalNotificationHub.BroadcastNotification(followingUsername, notificationJSON)
 
     c.JSON(http.StatusOK, gin.H{"message": "Successfully followed user"})
 }

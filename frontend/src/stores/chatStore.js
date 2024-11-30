@@ -83,38 +83,47 @@ export const useChatStore = defineStore('chatStore', () => {
     wsConnected.value = true;
     loader.value = false;
   };
-
   
 
   const handleWebSocketMessage = (data) => {
     try {
+      console.log("WebSocket message received:", data);
+  
       const chatIndex = chats.value.findIndex(chat => chat.chat_id === data.chat_id);
+      console.log("Chat index found:", chatIndex);
+  
       if (chatIndex !== -1) {
+        console.log("Updating existing chat:", chats.value[chatIndex]);
         chats.value[chatIndex] = {
           ...chats.value[chatIndex],
           unread_count: data.unread_count,
-          last_message_time: data.last_message_time || new Date().toISOString(),
+          last_message_time: data.last_message_time ,
           message: data.message,
           user: data.user,
           profile_picture: data.profile_picture,
           last_message: data.last_message
         };
+        console.log("Updated chat:", chats.value[chatIndex]);
       } else {
+        console.log("Adding new chat:", data);
         chats.value.push({
           chat_id: data.chat_id,
           user: data.user,
           unread_count: data.unread_count,
-          last_message_time: data.last_message_time || new Date().toISOString(),
+          last_message_time: data.last_message_time,
           message: data.message,
           profile_picture: data.profile_picture,
           last_message: data.last_message
         });
+        console.log("New chat added:", data);
       }
+  
       chats.value = chats.value.slice().sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
+      console.log("Chats after sorting:", chats.value);
     } catch (e) {
       console.error("Error processing WebSocket message:", e);
     }
-  };
+  };  
 
   const fetchActiveUsers = async () => {
     try {
@@ -125,7 +134,6 @@ export const useChatStore = defineStore('chatStore', () => {
       });
       if (response.data && response.data.active_users) {
         activeUsers.value = response.data.active_users;
-        emitter.emit("active-users-fetched", response.data.active_users);
       } else {
         activeUsers.value = [];
       }
@@ -159,14 +167,6 @@ export const useChatStore = defineStore('chatStore', () => {
     console.log("WebSocket connection closed");
     wsConnected.value = false;
   };
-
-  onMounted(() => {
-    emitter.on('active-users-fetched', handleActiveUsersFetched);
-  });
-
-  onUnmounted(() => {
-    emitter.off('active-users-fetched', handleActiveUsersFetched);
-  });
 
   return {
     chats,

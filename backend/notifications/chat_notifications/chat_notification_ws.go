@@ -1,4 +1,4 @@
-package notifications
+package chat_notifications
 
 import (
 	"log"
@@ -10,17 +10,16 @@ import (
 	"github.com/vaanskii/vansify/utils"
 )
 
-var notificationUpgrader = websocket.Upgrader{
+var chatNotificationUpgrader = websocket.Upgrader{
     ReadBufferSize:  1024,
     WriteBufferSize: 1024,
     CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
-// A map to track connected users
 var connectedUsers = make(map[string]*websocket.Conn)
 var mu sync.Mutex
 
-func NotificationWsHandler(c *gin.Context) {
+func ChatNotificationWsHandler(c *gin.Context) {
     claims, exists := c.Get("claims")
     if !exists {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -33,7 +32,7 @@ func NotificationWsHandler(c *gin.Context) {
     }
     username := customClaims.Username
 
-    conn, err := notificationUpgrader.Upgrade(c.Writer, c.Request, nil)
+    conn, err := chatNotificationUpgrader.Upgrade(c.Writer, c.Request, nil)
     if err != nil {
         log.Println("WebSocket Upgrade error:", err)
         return
@@ -51,8 +50,8 @@ func NotificationWsHandler(c *gin.Context) {
         conn.Close()
     }()
 
-    GlobalNotificationHub.AddConnection(conn, username)
-    defer GlobalNotificationHub.RemoveConnection(conn)
+    ChatNotification.AddConnection(conn, username)
+    defer ChatNotification.RemoveConnection(conn)
 
     for {
         messageType, p, err := conn.ReadMessage()

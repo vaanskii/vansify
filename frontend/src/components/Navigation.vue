@@ -112,10 +112,16 @@ const logout = async () => {
 
 
 onMounted(() => {
-  emitter.on('ws-open', handleWebSocketOpen);
-  emitter.on('ws-message', handleWebSocketMessage);
-  emitter.on('ws-error', handleWebSocketError);
-  emitter.on('ws-close', handleWebSocketClose);
+  emitter.on('chat-ws-open', handleWebSocketOpen);
+  emitter.on('chat-ws-message', handleWebSocketMessage);
+  emitter.on('chat-ws-error', handleWebSocketError);
+  emitter.on('chat-ws-close', handleWebSocketClose);
+
+  emitter.on('global-ws-open', handleWebSocketOpen);
+  emitter.on('global-ws-message', handleWebSocketMessage);
+  emitter.on('global-ws-error', handleWebSocketError);
+  emitter.on('global-ws-close', handleWebSocketClose);
+
   emitter.on('notification-updated', fetchUnreadNotificationCount);
   emitter.on('chat-updated', fetchChatUnreadCount);
   emitter.on('chat-read', fetchChatUnreadCount);
@@ -126,7 +132,6 @@ onMounted(() => {
   }
 });
 
-// Watch for authentication changes and fetch data
 watch(
   () => store.user.isAuthenticated,
   async (newVal) => {
@@ -138,10 +143,16 @@ watch(
 );
 
 onUnmounted(() => {
+  emitter.off('chat-ws-open', handleWebSocketOpen);
+  emitter.off('chat-ws-message', handleWebSocketMessage);
+  emitter.off('chat-ws-error', handleWebSocketError);
+  emitter.off('chat-ws-close', handleWebSocketClose);
+
   emitter.off('ws-open', handleWebSocketOpen);
   emitter.off('ws-message', handleWebSocketMessage);
   emitter.off('ws-error', handleWebSocketError);
   emitter.off('ws-close', handleWebSocketClose);
+
   emitter.off('notification-updated', fetchUnreadNotificationCount);
   emitter.off('chat-updated', fetchChatUnreadCount);
   emitter.off('chat-read', fetchChatUnreadCount);

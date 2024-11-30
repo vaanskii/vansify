@@ -1,4 +1,4 @@
-package notifications
+package chat_notifications
 
 import (
 	"encoding/json"
@@ -38,7 +38,7 @@ func NotifyNewMessage(userID int64, message models.Message) {
         "sender":           message.Username,
         "last_message_time": time.Now().Format(time.RFC3339),
     })
-    GlobalNotificationHub.BroadcastNotification(notificationMessage)
+    ChatNotification.SendChatNotification(message.Username, notificationMessage)
 }
 
 

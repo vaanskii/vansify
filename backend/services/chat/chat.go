@@ -15,7 +15,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/vaanskii/vansify/db"
 	"github.com/vaanskii/vansify/models"
-	"github.com/vaanskii/vansify/notifications"
+	"github.com/vaanskii/vansify/notifications/chat_notifications"
 	chatHub "github.com/vaanskii/vansify/services/chat/hub"
 	"github.com/vaanskii/vansify/services/user"
 	"github.com/vaanskii/vansify/utils"
@@ -137,7 +137,7 @@ func ChatWsHandler(c *gin.Context) {
     cm.AddUserToChat(chatID, senderUsername)
     defer cm.RemoveUserFromChat(chatID, senderUsername)
 
-    hub.AddConnection(conn)
+    hub.AddConnection(conn, senderUsername)
     defer hub.RemoveConnection(conn)
 
     // Retrieve chat users
@@ -234,14 +234,21 @@ func ChatWsHandler(c *gin.Context) {
             Receiver:       recipientUsername,
         }
 
-        // Send the message back to the sender
+        // Marshal the full message
         broadcastMessage, _ := json.Marshal(fullMessage)
+
+        // Send the message to the recipient only
+        recipientConn := hub.GetConnectionByUsername(recipientUsername)
+        if recipientConn != nil {
+            recipientConn.WriteMessage(messageType, broadcastMessage)
+            log.Printf("Sent message ID %d to recipient %s", incomingMessage.ID, recipientUsername)
+        } else {
+            log.Printf("Recipient %s is not connected", recipientUsername)
+        }
+
+        // Send the message back to the sender
         conn.WriteMessage(messageType, broadcastMessage)
         log.Printf("Sent message ID %d back to sender", incomingMessage.ID)
-
-        // Broadcast the message to other connected clients
-        hub.BroadcastMessage(conn, messageType, broadcastMessage)
-        log.Printf("Broadcasted message ID %d to other clients", incomingMessage.ID)
 
         // Fetch the last message for notifications
         var lastMessage string
@@ -257,12 +264,12 @@ func ChatWsHandler(c *gin.Context) {
         if err != nil {
             log.Println("Error querying recipient ID:", err)
         } else {
-            notifications.NotifyNewMessage(int64(recipientID), incomingMessage)
-            chatUnreadCount, err := notifications.GetUnreadChatMessagesCount(int64(recipientID), chatID)
+            chat_notifications.NotifyNewMessage(int64(recipientID), incomingMessage)
+            chatUnreadCount, err := chat_notifications.GetUnreadChatMessagesCount(int64(recipientID), chatID)
             if err != nil {
                 log.Printf("Error getting unread message count for chat: %v", err)
             } else {
-                totalUnreadCount, err := notifications.GetTotalUnreadMessageCount(int64(recipientID))
+                totalUnreadCount, err := chat_notifications.GetTotalUnreadMessageCount(int64(recipientID))
                 if err != nil {
                     log.Printf("Error getting total unread message count: %v", err)
                 } else {
@@ -272,13 +279,14 @@ func ChatWsHandler(c *gin.Context) {
                         "unread_count":       chatUnreadCount,
                         "total_unread_count": totalUnreadCount,
                         "message":            incomingMessage.Message,
+                        "recipient":          recipientUsername,
                         "user":               senderUsername,
-                        "profile_picture":    profilePicture,
+                        "profile_picture":     profilePicture,
                         "sender":             senderUsername,
                         "last_message_time":  time.Now().Format(time.RFC3339),
                         "last_message":       lastMessage,
                     })
-                    notifications.GlobalNotificationHub.BroadcastNotification(chatNotificationMessage)
+                    chat_notifications.ChatNotification.SendChatNotification(recipientUsername, chatNotificationMessage)
                 }
             }
         }
@@ -332,7 +340,6 @@ func UpdateStatusWhenUserBecomesActive(chatID string, recipientUsername string, 
             }
             broadcastMessage, _ := json.Marshal(statusUpdateMessage)
             hub.BroadcastMessage(nil, websocket.TextMessage, broadcastMessage)
-            log.Printf("Broadcasted status update for chat %s and user %s: %s", chatID, senderUsername, broadcastMessage)
         }
     }
 }
@@ -624,7 +631,7 @@ func DeleteMessage(c *gin.Context) {
     }
 
     // Call GetTotalUnreadMessageCount to update the unread message count for the recipient
-    totalUnreadCount, err := notifications.GetTotalUnreadMessageCount(recipientUserID)
+    totalUnreadCount, err := chat_notifications.GetTotalUnreadMessageCount(recipientUserID)
     if err != nil {
         log.Println("Error getting total unread message count for recipient:", err)
     } else {
