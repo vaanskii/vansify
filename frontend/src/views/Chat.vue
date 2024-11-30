@@ -31,7 +31,7 @@
             <span v-if="message.status === 'read'">(Read)</span>
             <span v-if="message.status === 'sending'">(Sending...)</span> -->
           </span>
-          <span>{{ message.created_at }}</span>
+          <span>{{ formatTime(message.created_at) }}</span>
           <button v-if="message.isOwnMessage" @click="deleteMessage(message.id)" class="delete-button">Delete</button>
         </div>
       </div>
@@ -205,71 +205,93 @@ watch(
 );
 
 
-ws.onmessage = (event) => {
-  const message = JSON.parse(event.data);
-  console.log("Received message with timestamp:", message.created_at);
+  ws.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    console.log("message", message.created_at)
+    message.message_id = message.message_id || message.id;
 
-  // Convert the received timestamp to local time
-  if (message.created_at) {
-    const date = new Date(message.created_at);
-    if (!isNaN(date.getTime())) {
-      // Convert to local time string
-      message.created_at = date.toLocaleString();
-      console.log("Converted to local time:", message.created_at);
-    } else {
-      console.error("Invalid time value:", message.created_at);
-      message.created_at = new Date().toLocaleString(); // Fallback to the current time if the date is invalid
-    }
-  } else {
-    message.created_at = new Date().toLocaleString(); // Fallback to the current time if the date is missing
-  }
+    switch (message.type) {
+      case 'MESSAGE_ID':
+        const messageId = message.id;
+        console.log(`Received message ID: ${messageId}`);
+        break;
 
-  // Process the message...
-  message.message_id = message.message_id || message.id;
+      case 'MESSAGE_DELETED':
+        const deleteIndex = messages.value.findIndex(msg => msg.id == message.message_id);
+        if (deleteIndex !== -1) {
+          messages.value.splice(deleteIndex, 1);
+        }
+        break;
 
-  switch (message.type) {
-    case 'MESSAGE_ID':
-      const messageId = message.id;
-      console.log(`Received message ID: ${messageId}`);
-      break;
-
-    // Handle other message types...
-
-    default:
-      if (message.chat_id === route.params.chatID) {
-        if (message.username === store.user.username) {
-          const ownIndex = messages.value.findIndex(msg => msg.id == message.message_id);
-          if (ownIndex !== -1) {
-            messages.value[ownIndex].status = message.status;
-          } else {
-            console.log(`Message ID ${message.message_id} not found`);
-          }
+      case 'STATUS_UPDATE':
+        if (message.chat_id === route.params.chatID && message.message_ids) {
+          message.message_ids.forEach((msgID) => {
+            const updateIndex = messages.value.findIndex(msg => msg.id == msgID);
+            if (updateIndex !== -1) {
+              messages.value[updateIndex].status = message.status;
+              console.log(`Message status updated to ${message.status} for message ID ${msgID}`);
+            } else {
+              console.log(`Message ID ${msgID} not found`);
+            }
+          });
         } else {
-          if (!messages.value.some(msg => msg.id == message.message_id)) {
-            messages.value.push({
-              ...message,
-              isOwnMessage: message.username === store.user.username,
-              profile_picture: `/${message.profile_picture}`,
-              last_message: message.last_message,
-              file_url: message.file_url,
-              receiver: message.receiver,
-            });
+          console.log(`Chat ID mismatch or no message_ids in STATUS_UPDATE for chat ${message.chat_id}`);
+        }
+        break;
+
+      case 'STATUS_UPDATE_READ':
+        if (message.chat_id === route.params.chatID && message.username !== store.user.username) {
+          messages.value.forEach((msg) => {
+            if (msg.status !== 'read') {
+              msg.status = 'read';
+              console.log(`Message status updated to read for chat ${message.chat_id}`);
+            }
+          });
+        } else if (message.chat_id !== route.params.chatID) {
+          console.log(`Chat ID mismatch in STATUS_UPDATE_READ for chat ${message.chat_id}`);
+        } else {
+          console.log(`STATUS_UPDATE_READ received for sender's own message, no update needed`);
+        }
+        break;
+
+      default:
+        if (message.chat_id === route.params.chatID) {
+          if (message.username === store.user.username) {
+            const ownIndex = messages.value.findIndex(msg => msg.id == message.message_id);
+            if (ownIndex !== -1) {
+              messages.value[ownIndex].status = message.status;
+            } else {
+              console.log(`Message ID ${message.message_id} not found`);
+            }
+          } else {
+            if (!messages.value.some(msg => msg.id == message.message_id)) {
+              messages.value.push({
+                ...message,
+                isOwnMessage: message.username === store.user.username,
+                profile_picture: `/${message.profile_picture}`,
+                last_message: message.last_message,
+                file_url: message.file_url,
+                receiver: message.receiver,
+              });
+            }
           }
         }
+        break;
+    }
+      if (route.params.chatID === message.chat_id && message.username !== store.user.username && !notificationsRead) {
+        markChatNotificationsAsRead(message.chat_id);
+        notificationsRead = true; 
       }
-      break;
-  }
+  };
 
-  if (route.params.chatID === message.chat_id && message.username !== store.user.username && !notificationsRead) {
-    markChatNotificationsAsRead(message.chat_id);
-    notificationsRead = true;
-  }
-};
 };
 
+
+import moment from 'moment';
 
 const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
   try {
+    console.log('Fetching chat history for chatID:', chatID, 'with limit:', limit, 'and offset:', offset);
     const response = await axios.get(`/v1/chat/${chatID}/history`, {
       headers: {
         Authorization: `Bearer ${store.user.access}`
@@ -280,23 +302,33 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
         offset
       }
     });
+    console.log('Response received:', response.data);
+
     if (response.data) {
-      const newMessages = response.data.map(message => ({
-        ...message,
-        isOwnMessage: message.username === username,
-        status: message.status,
-        time: new Date(message.created_at), 
-        profile_picture: `/${message.profile_picture}`
-      }));
+      const newMessages = response.data.map(message => {
+        const localTime = moment.utc(message.created_at).local().format('YYYY-MM-DD HH:mm:ss');
+        console.log('Processing message:', message);
+        console.log('Converted time:', localTime);
+        
+        return {
+          ...message,
+          isOwnMessage: message.username === username,
+          status: message.status,
+          time: localTime, // Convert to local time string
+          profile_picture: `/${message.profile_picture}`
+        };
+      });
 
       const existingMessageIds = new Set(messages.value.map(msg => msg.id));
       newMessages.forEach(newMessage => {
         if (!existingMessageIds.has(newMessage.id)) {
+          console.log('Adding new message:', newMessage);
           messages.value.unshift(newMessage);
         }
       });
 
       messages.value.sort((a, b) => new Date(a.time) - new Date(b.time));
+      console.log('Sorted messages:', messages.value);
 
       if (newMessages.length < limit) {
         hasMoreMessages.value = false; 
@@ -309,7 +341,6 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
     if (offset === 0) isLoading.value = false;
   }
 };
-
 
 const markChatNotificationsAsRead = async (chatID) => {
   try {
@@ -431,16 +462,6 @@ const uploadFile = async (file) => {
   }
 };
 
-function getLocalTimeISOString() {
-  const now = new Date();
-  const offset = now.getTimezoneOffset() * 60000;
-  const localISOTime = new Date(now.getTime() - offset).toISOString().slice(0, -1);
-  const timezoneOffset = -now.getTimezoneOffset() / 60;
-  const formattedOffset = `${timezoneOffset >= 0 ? '+' : '-'}${Math.abs(timezoneOffset).toString().padStart(2, '0')}:00`;
-  return localISOTime + formattedOffset;
-}
-
-
 const sendMessage = async () => {
   if (!newMessage.value && !selectedFile.value) {
     return;
@@ -449,7 +470,7 @@ const sendMessage = async () => {
   let messageToSend = {
     username,
     message: newMessage.value || "Sent a file",
-    created_at: getLocalTimeISOString(),
+    created_at: new Date().toISOString(),
     isOwnMessage: true,
   };
 
