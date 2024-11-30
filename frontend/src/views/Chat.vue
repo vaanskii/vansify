@@ -52,7 +52,6 @@ import { useRoute, useRouter } from 'vue-router';
 import { userStore } from '@/stores/user';
 import emitter from '@/eventBus';
 import notify from '@/utils/notify';
-import moment from 'moment';
 
 const apiUrl = import.meta.env.VITE_WS_URL;
 const messages = ref([]);
@@ -208,7 +207,7 @@ watch(
 
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
-    console.log("message", message.created_at)
+    console.log("message", message)
     message.message_id = message.message_id || message.id;
 
     switch (message.type) {
@@ -287,9 +286,9 @@ watch(
 
 };
 
+
 const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
   try {
-    console.log('Fetching chat history for chatID:', chatID, 'with limit:', limit, 'and offset:', offset);
     const response = await axios.get(`/v1/chat/${chatID}/history`, {
       headers: {
         Authorization: `Bearer ${store.user.access}`
@@ -300,33 +299,23 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
         offset
       }
     });
-    console.log('Response received:', response.data);
-
     if (response.data) {
-      const newMessages = response.data.map(message => {
-        const localTime = moment.utc(message.created_at).local().format('YYYY-MM-DD HH:mm:ss');
-        console.log('Processing message:', message);
-        console.log('Converted time:', localTime);
-        
-        return {
-          ...message,
-          isOwnMessage: message.username === username,
-          status: message.status,
-          time: localTime, // Convert to local time string
-          profile_picture: `/${message.profile_picture}`
-        };
-      });
+      const newMessages = response.data.map(message => ({
+        ...message,
+        isOwnMessage: message.username === username,
+        status: message.status,
+        time: new Date(message.created_at), 
+        profile_picture: `/${message.profile_picture}`
+      }));
 
       const existingMessageIds = new Set(messages.value.map(msg => msg.id));
       newMessages.forEach(newMessage => {
         if (!existingMessageIds.has(newMessage.id)) {
-          console.log('Adding new message:', newMessage);
           messages.value.unshift(newMessage);
         }
       });
 
       messages.value.sort((a, b) => new Date(a.time) - new Date(b.time));
-      console.log('Sorted messages:', messages.value);
 
       if (newMessages.length < limit) {
         hasMoreMessages.value = false; 
@@ -339,6 +328,7 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
     if (offset === 0) isLoading.value = false;
   }
 };
+
 
 const markChatNotificationsAsRead = async (chatID) => {
   try {
