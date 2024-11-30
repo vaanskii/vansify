@@ -26,6 +26,7 @@
           <span v-if="isUserActive(chat.user)" class="active-indicator">●</span>
         </router-link>
         <button @click="deleteChat(chat.chat_id)">Delete</button>
+        <button @click="deleteChatforUser(chat.chat_id)">delete for me</button>
       </li>
     </ul>
     <div v-else>No chats found</div>
@@ -90,6 +91,10 @@ onUnmounted(() => {
 const deleteChat = (chatID) => {
   chatStore.deleteChat(chatID);
 };
+
+const deleteChatforUser = (chatID) => {
+  chatStore.deleteMessagesForUser(chatID)
+}
 
 const markChatAsRead = (chatID) => {
   chatStore.markChatAsRead(chatID);

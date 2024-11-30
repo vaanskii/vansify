@@ -91,6 +91,7 @@ func main() {
         v1.GET("/notifications/chat/unread", auth.AuthMiddleware(), chat_notifications.GetUnreadChatNotifications)
         v1.POST("/notifications/chat/mark-read/:chatID", auth.AuthMiddleware(), chat.MarkChatNotificationsAsRead)
         v1.DELETE("/chat/:chatID", auth.AuthMiddleware(), chat.DeleteChat)
+        v1.DELETE("/chat/:chatID/delete-messages", auth.AuthMiddleware(), chat.DeleteUserMessages)
         v1.DELETE("/message/:messageID", auth.AuthMiddleware(), chat.DeleteMessage)
         v1.GET("/chat-notifications/ws", auth.AuthMiddleware(), chat_notifications.ChatNotificationWsHandler)
 

@@ -52,6 +52,25 @@ export const useChatStore = defineStore('chatStore', () => {
     }
   };
 
+  const deleteMessagesForUser = async (chatID) => {
+    console.log(`Attempting to delete messages for chatID: ${chatID}`);
+    try {
+      await axios.delete(`/v1/chat/${chatID}/delete-messages`, {
+        headers: { 
+          Authorization: `Bearer ${store.user.access}` 
+        }
+      });
+      console.log("Messages deleted successfully on the backend");
+  
+      // Remove the chat from the list immediately
+      chats.value = chats.value.filter(chat => chat.chat_id !== chatID);
+      console.log("Updated chats:", chats.value);
+    } catch (err) {
+      console.error('Error:', err.response ? err.response.data.error : 'An error occurred');
+    }
+  };
+  
+
   const sortedChats = computed(() => {
     return chats.value.slice().sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
   });
@@ -189,6 +208,7 @@ export const useChatStore = defineStore('chatStore', () => {
     markChatAsRead,
     handleWebSocketError,
     handleWebSocketClose,
-    handleActiveUsersFetched
+    handleActiveUsersFetched,
+    deleteMessagesForUser
   };
 });

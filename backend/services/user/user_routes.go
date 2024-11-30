@@ -132,11 +132,12 @@ func GetUserChats(c *gin.Context) {
             c.user1, 
             c.user2, 
             COALESCE(MAX(m.created_at), '') AS last_message_time,
-            COALESCE((SELECT message FROM messages WHERE chat_id = c.chat_id ORDER BY created_at DESC LIMIT 1), '') AS last_message
+            COALESCE((SELECT message FROM messages WHERE chat_id = c.chat_id AND (deleted_for IS NULL OR deleted_for NOT LIKE ?) ORDER BY created_at DESC LIMIT 1), '') AS last_message
         FROM chats c
         LEFT JOIN messages m ON c.chat_id = m.chat_id
-        WHERE c.user1 = ? OR c.user2 = ?
-        GROUP BY c.chat_id, c.user1, c.user2`, username, username)
+        WHERE (c.user1 = ? OR c.user2 = ?) 
+        GROUP BY c.chat_id, c.user1, c.user2
+        HAVING last_message IS NOT NULL`, "%"+username+"%", username, username)
     if err != nil {
         log.Printf("Error fetching user chats: %v\n", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching user chats"})
@@ -184,7 +185,7 @@ func GetUserChats(c *gin.Context) {
             "user":               otherUser,
             "unread_count":       unreadCount,
             "last_message_time":  lastMessageTime.String,
-            "profile_picture":     profilePicture,
+            "profile_picture":    profilePicture,
             "last_message":       lastMessage.String, 
         })
     }

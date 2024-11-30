@@ -418,25 +418,33 @@ func MarkChatNotificationsAsRead(c *gin.Context) {
 
 func GetChatHistory(c *gin.Context) {
     chatID := c.Param("chatID")
-    chattingUser := c.Query("user")
 
-    if chattingUser == "" {
-        log.Println("No user specified in the query parameters")
-        c.JSON(http.StatusBadRequest, gin.H{"error": "No user specified in the query parameters"})
+    // Get the authenticated user from the claims
+    claims, exists := c.Get("claims")
+    if !exists {
+        log.Println("No claims found")
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
         return
     }
 
-    log.Printf("Fetching profile picture for user: %s", chattingUser)
+    customClaims, ok := claims.(*utils.CustomClaims)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+        return
+    }
 
-    // Fetch the profile picture for the chatting user
+    username := customClaims.Username
+    log.Printf("Fetching chat history for user: %s", username)
+
+    // Fetch the profile picture for the authenticated user
     var profilePicture string
-    err := db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", chattingUser).Scan(&profilePicture)
+    err := db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", username).Scan(&profilePicture)
     if err != nil {
         log.Println("Error fetching user profile picture:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching user profile picture"})
         return
     }
-    log.Printf("Profile Picture for %s: %s", chattingUser, profilePicture)
+    log.Printf("Profile Picture for %s: %s", username, profilePicture)
 
     // Get limit and offset from query parameters
     limit, err := strconv.Atoi(c.DefaultQuery("limit", "20"))
@@ -453,8 +461,8 @@ func GetChatHistory(c *gin.Context) {
         return
     }
 
-    // Fetch messages for the chat with pagination
-    rows, err := db.DB.Query("SELECT id, chat_id, message, username, file_url, created_at, status FROM messages WHERE chat_id = ? LIMIT ? OFFSET ?", chatID, limit, offset)
+    // Fetch messages for the chat with pagination, including messages marked as deleted for the user
+    rows, err := db.DB.Query("SELECT id, chat_id, message, username, file_url, created_at, status FROM messages WHERE chat_id = ? AND (deleted_for IS NULL OR deleted_for NOT LIKE ?) LIMIT ? OFFSET ?", chatID, "%"+username+"%", limit, offset)
     if err != nil {
         log.Println("Error fetching chat history:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching chat history"})
@@ -478,15 +486,14 @@ func GetChatHistory(c *gin.Context) {
             "message":         message.Message,
             "username":        message.Username,
             "created_at":      formattedTime,
-            "profile_picture":  profilePicture,
-            "file_url":         message.FileURL,
+            "profile_picture": profilePicture,
+            "file_url":        message.FileURL,
             "status":          message.Status, 
         })
     }
     log.Println("Fetched Messages:", messages)
     c.JSON(http.StatusOK, messages)
 }
-
 
 func CheckChatExists(c *gin.Context) {
 	user1 := c.Param("user1")
@@ -553,6 +560,74 @@ func DeleteChat(c *gin.Context) {
 
     c.JSON(http.StatusOK, gin.H{"message": "Chat deleted successfully"})
 }
+
+func DeleteUserMessages(c *gin.Context) {
+    chatID := c.Param("chatID")
+    log.Printf("Deleting messages and chat for user with chatID: %s", chatID)
+
+    claims, exists := c.Get("claims")
+    if !exists {
+        log.Println("No claims found")
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+        return
+    }
+
+    customClaims, ok := claims.(*utils.CustomClaims)
+    if !ok {
+        log.Println("Invalid token claims")
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+        return
+    }
+
+    username := customClaims.Username
+    log.Printf("User %s is attempting to delete messages and chat %s", username, chatID)
+
+    var chatUserCount int
+    err := db.DB.QueryRow("SELECT COUNT(*) FROM chats WHERE chat_id = ? AND (user1 = ? OR user2 = ?)", chatID, username, username).Scan(&chatUserCount)
+    if err != nil || chatUserCount == 0 {
+        log.Printf("Chat not found or user %s is not part of the chat. Error: %v", username, err)
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+        return
+    }
+
+    log.Printf("User %s is part of the chat %s", username, chatID)
+
+    // Mark all messages as deleted for the user
+    _, err = db.DB.Exec(`
+        UPDATE messages 
+        SET deleted_for = 
+            CASE 
+                WHEN deleted_for IS NULL OR deleted_for = '' THEN ?
+                ELSE CONCAT_WS(',', deleted_for, ?)
+            END 
+        WHERE chat_id = ? AND (deleted_for IS NULL OR deleted_for NOT LIKE ?)`, 
+        username, username, chatID, "%"+username+"%")
+    if err != nil {
+        log.Printf("Error marking messages as deleted for user %s in chat %s: %v", username, chatID, err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error marking messages as deleted"})
+        return
+    }
+
+    // Mark the chat as deleted for the user
+    _, err = db.DB.Exec(`
+        UPDATE chats 
+        SET deleted_for = 
+            CASE 
+                WHEN deleted_for IS NULL OR deleted_for = '' THEN ?
+                ELSE CONCAT(deleted_for, ',', ?)
+            END 
+        WHERE chat_id = ? AND (deleted_for IS NULL OR deleted_for NOT LIKE ?)`, 
+        username, username, chatID, "%"+username+"%")
+    if err != nil {
+        log.Printf("Error marking chat as deleted for user %s in chat %s: %v", username, chatID, err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error marking chat as deleted"})
+        return
+    }
+
+    log.Printf("Successfully marked messages and chat as deleted for user %s in chat %s", username, chatID)
+    c.JSON(http.StatusOK, gin.H{"message": "Messages and chat deleted successfully for user"})
+}
+
 
 
 func DeleteMessage(c *gin.Context) {

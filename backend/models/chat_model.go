@@ -9,6 +9,7 @@ type Message struct {
     Username    string    `json:"username"`
     FileURL     string    `json:"file_url,omitempty"`
     CreatedAt   time.Time `json:"created_at"`
+    DeletedFor  string    `json:"deleted_for"`
     Status      string    `json:"status"`
 }
 
