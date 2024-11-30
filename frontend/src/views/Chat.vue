@@ -207,7 +207,7 @@ watch(
 
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
-    console.log("message", message.created_at)
+    console.log("Received message with timestamp:", message.created_at);
     message.message_id = message.message_id || message.id;
 
     switch (message.type) {
