@@ -31,7 +31,7 @@
             <span v-if="message.status === 'read'">(Read)</span>
             <span v-if="message.status === 'sending'">(Sending...)</span> -->
           </span>
-          <span>{{ formatTime(message.created_at) }}</span>
+          <span>{{ message.created_at }}</span>
           <button v-if="message.isOwnMessage" @click="deleteMessage(message.id)" class="delete-button">Delete</button>
         </div>
       </div>
