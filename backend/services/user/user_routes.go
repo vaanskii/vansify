@@ -1,6 +1,7 @@
 package user
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
 
@@ -131,10 +132,10 @@ func GetUserChats(c *gin.Context) {
             c.user1, 
             c.user2, 
             COALESCE(MAX(m.created_at), '') AS last_message_time,
-            (SELECT message FROM messages WHERE chat_id = c.chat_id ORDER BY created_at DESC LIMIT 1) AS last_message
+            COALESCE((SELECT message FROM messages WHERE chat_id = c.chat_id ORDER BY created_at DESC LIMIT 1), '') AS last_message
         FROM chats c
         LEFT JOIN messages m ON c.chat_id = m.chat_id
-        WHERE (c.user1 = ? OR c.user2 = ?) AND c.chat_id IN (SELECT DISTINCT chat_id FROM messages)
+        WHERE c.user1 = ? OR c.user2 = ?
         GROUP BY c.chat_id, c.user1, c.user2`, username, username)
     if err != nil {
         log.Printf("Error fetching user chats: %v\n", err)
@@ -145,7 +146,9 @@ func GetUserChats(c *gin.Context) {
 
     var chats []map[string]interface{}
     for rows.Next() {
-        var chatID, user1, user2, lastMessageTime, lastMessage string
+        var chatID, user1, user2 string
+        var lastMessageTime, lastMessage sql.NullString
+
         if err := rows.Scan(&chatID, &user1, &user2, &lastMessageTime, &lastMessage); err != nil {
             log.Printf("Error scanning chat: %v\n", err)
             c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning chat"})
@@ -162,7 +165,7 @@ func GetUserChats(c *gin.Context) {
         err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", otherUser).Scan(&profilePicture)
         if err != nil {
             log.Printf("Error querying profile picture for user %s: %v\n", otherUser, err)
-            profilePicture = "" // Set to empty or a default value if needed
+            profilePicture = ""
         }
 
         log.Printf("Other User: %s, Profile Picture: %s", otherUser, profilePicture)
@@ -180,11 +183,10 @@ func GetUserChats(c *gin.Context) {
             "chat_id":            chatID,
             "user":               otherUser,
             "unread_count":       unreadCount,
-            "last_message_time":  lastMessageTime,
+            "last_message_time":  lastMessageTime.String,
             "profile_picture":     profilePicture,
-            "last_message":       lastMessage, 
+            "last_message":       lastMessage.String, 
         })
-        
     }
 
     c.JSON(http.StatusOK, gin.H{"chats": chats})

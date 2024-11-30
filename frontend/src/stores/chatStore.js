@@ -24,9 +24,9 @@ export const useChatStore = defineStore('chatStore', () => {
           chat_id: chat.chat_id,
           user: chat.user,
           unread_count: chat.unread_count,
-          last_message_time: chat.last_message_time,
+          last_message_time: chat.last_message_time || "",
           profile_picture: chat.profile_picture,
-          last_message: chat.last_message
+          last_message: chat.last_message || "No messages yet"
         }));
         chats.value = newChats;
         loader.value = false;
@@ -37,7 +37,7 @@ export const useChatStore = defineStore('chatStore', () => {
       error.value = err.response ? err.response.data.error : 'An error occurred';
       console.error("Error fetching chats:", err);
     }
-  };
+  };  
 
   const deleteChat = async (chatID) => {
     try {
@@ -57,7 +57,11 @@ export const useChatStore = defineStore('chatStore', () => {
   });
 
   const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+  
     const timeDiff = Math.floor((Date.now() - new Date(timestamp)) / 1000);
+    if (isNaN(timeDiff)) return ''; 
+  
     if (timeDiff < 60) return 'Just now';
     const minutes = Math.floor(timeDiff / 60);
     if (minutes < 60) return `${minutes} min ago`;
@@ -65,7 +69,7 @@ export const useChatStore = defineStore('chatStore', () => {
     if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
     const days = Math.floor(hours / 24);
     return `${days} ${days === 1 ? 'day' : 'days'} ago`;
-  };
+  };  
 
   const updateMessageTimes = () => {
     chats.value = chats.value.map(chat => ({
