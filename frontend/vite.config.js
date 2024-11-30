@@ -12,6 +12,11 @@ export default defineConfig(({ mode }) => {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
       },
     },
+    build: {
+      rollupOptions: {
+        external: ['moment'], // Add moment to external modules
+      },
+    },
     server: {
       proxy: {
         '/assets/images': {
