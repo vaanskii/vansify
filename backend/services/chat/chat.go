@@ -226,12 +226,14 @@ func ChatWsHandler(c *gin.Context) {
         // Prepare full message to send to clients
         fullMessage := struct {
             models.Message
-            ProfilePicture string `json:"profile_picture"`
-            Receiver       string `json:"receiver"`
+            ProfilePicture  string    `json:"profile_picture"`
+            Receiver       string    `json:"receiver"`
+            CreatedAt      string    `json:"created_at"`
         }{
             Message:        incomingMessage,
-            ProfilePicture: profilePicture,
+            ProfilePicture:   profilePicture,
             Receiver:       recipientUsername,
+            CreatedAt:      time.Now().Format(time.RFC3339),
         }
 
         // Marshal the full message
@@ -486,8 +488,8 @@ func GetChatHistory(c *gin.Context) {
             "message":         message.Message,
             "username":        message.Username,
             "created_at":      formattedTime,
-            "profile_picture": profilePicture,
-            "file_url":        message.FileURL,
+            "profile_picture":  profilePicture,
+            "file_url":         message.FileURL,
             "status":          message.Status, 
         })
     }

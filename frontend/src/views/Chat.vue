@@ -207,6 +207,7 @@ watch(
 
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
+    console.log("message", message.created_at)
     message.message_id = message.message_id || message.id;
 
     switch (message.type) {
@@ -449,6 +450,16 @@ const uploadFile = async (file) => {
   }
 };
 
+function getLocalTimeISOString() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  const localISOTime = new Date(now.getTime() - offset).toISOString().slice(0, -1);
+  const timezoneOffset = -now.getTimezoneOffset() / 60;
+  const formattedOffset = `${timezoneOffset >= 0 ? '+' : '-'}${Math.abs(timezoneOffset).toString().padStart(2, '0')}:00`;
+  return localISOTime + formattedOffset;
+}
+
+
 const sendMessage = async () => {
   if (!newMessage.value && !selectedFile.value) {
     return;
@@ -457,7 +468,7 @@ const sendMessage = async () => {
   let messageToSend = {
     username,
     message: newMessage.value || "Sent a file",
-    created_at: new Date().toISOString(),
+    created_at: getLocalTimeISOString(),
     isOwnMessage: true,
   };
 
