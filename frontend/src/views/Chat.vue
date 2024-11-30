@@ -143,6 +143,8 @@ const deleteMessage = async (messageID) => {
   }
 };
 
+let intentionalClosure = false;
+
 const connectWebSocket = (chatID, token) => {
   const wsURL = `${wsConst}//${apiUrl}/v1/chat/${chatID}/ws?token=${encodeURIComponent(token)}`;
   ws = new WebSocket(wsURL);
@@ -151,7 +153,7 @@ const connectWebSocket = (chatID, token) => {
     isConnected.value = true;
     retryAttempt = 0;
     isLoading.value = false;
-
+    console.log("websocket established in chat")
     const unsentMessages = messages.value.filter(msg => msg.status === false && msg.isOwnMessage);
     unsentMessages.forEach(message => {
       ws.send(JSON.stringify({ message: message.message, username }));
@@ -166,96 +168,120 @@ const connectWebSocket = (chatID, token) => {
   };
 
   ws.onclose = () => {
-    isConnected.value = false;
-    if (retryAttempt < maxRetries) {
-      setTimeout(() => {
-        retryAttempt++;
-        connectWebSocket(chatID, token);
-      }, Math.min(1000 * Math.pow(2, retryAttempt), 30000));
-    } else {
-      console.error('Max reconnection attempts reached.');
-    }
-  };
-
-ws.onmessage = (event) => {
-  const message = JSON.parse(event.data);
-  message.message_id = message.message_id || message.id;
-
-  switch (message.type) {
-    case 'MESSAGE_ID':
-      // Handle the message ID response to avoid the error
-      const messageId = message.id;
-      console.log(`Received message ID: ${messageId}`);
-      break;
-
-    case 'MESSAGE_DELETED':
-      const deleteIndex = messages.value.findIndex(msg => msg.id == message.message_id);
-      if (deleteIndex !== -1) {
-        messages.value.splice(deleteIndex, 1);
-      }
-      break;
-
-    case 'STATUS_UPDATE':
-      if (message.chat_id === route.params.chatID && message.message_ids) {
-        message.message_ids.forEach((msgID) => {
-          const updateIndex = messages.value.findIndex(msg => msg.id == msgID);
-          if (updateIndex !== -1) {
-            messages.value[updateIndex].status = message.status;
-            console.log(`Message status updated to ${message.status} for message ID ${msgID}`);
-          } else {
-            console.log(`Message ID ${msgID} not found`);
-          }
-        });
-      } else {
-        console.log(`Chat ID mismatch or no message_ids in STATUS_UPDATE for chat ${message.chat_id}`);
-      }
-      break;
-
-    case 'STATUS_UPDATE_READ':
-      if (message.chat_id === route.params.chatID && message.username !== store.user.username) {
-        messages.value.forEach((msg) => {
-          if (msg.status !== 'read') {
-            msg.status = 'read';
-            console.log(`Message status updated to read for chat ${message.chat_id}`);
-          }
-        });
-      } else if (message.chat_id !== route.params.chatID) {
-        console.log(`Chat ID mismatch in STATUS_UPDATE_READ for chat ${message.chat_id}`);
-      } else {
-        console.log(`STATUS_UPDATE_READ received for sender's own message, no update needed`);
-      }
-      break;
-
-    default:
-      if (message.chat_id === route.params.chatID) {
-        if (message.username === store.user.username) {
-          const ownIndex = messages.value.findIndex(msg => msg.id == message.message_id);
-          if (ownIndex !== -1) {
-            messages.value[ownIndex].status = message.status;
-          } else {
-            console.log(`Message ID ${message.message_id} not found`);
-          }
-        } else {
-          if (!messages.value.some(msg => msg.id == message.message_id)) {
-            messages.value.push({
-              ...message,
-              isOwnMessage: message.username === store.user.username,
-              profile_picture: `/${message.profile_picture}`,
-              last_message: message.last_message,
-              file_url: message.file_url,
-              receiver: message.receiver,
-            });
-          }
-        }
-      }
-      break;
-  }
-
-  if (route.params.chatID === message.chat_id && message.username !== store.user.username && !notificationsRead) {
-    markChatNotificationsAsRead(message.chat_id);
-    notificationsRead = true; 
+  isConnected.value = false;
+  if (!intentionalClosure && retryAttempt < maxRetries) {
+    setTimeout(() => {
+      retryAttempt++;
+      connectWebSocket(chatID, token);
+    }, Math.min(1000 * Math.pow(2, retryAttempt), 30000));
+  } else if (!intentionalClosure) {
+    console.error('Max reconnection attempts reached.');
+  } else {
+    console.log("WebSocket intentionally closed, not attempting to reconnect.");
+    intentionalClosure = false;
   }
 };
+
+// Watch for changes in route.params.chatID to handle WebSocket closure when chatID becomes invalid
+watch(
+  () => route.params.chatID,
+  (newChatID, oldChatID) => {
+    if (!newChatID) {
+      intentionalClosure = true;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+        console.log("WebSocket closed because chatID is invalid");
+      }
+    } else if (newChatID !== oldChatID) {
+      intentionalClosure = true; 
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+        console.log("WebSocket closed to reconnect to a new chatID");
+      }
+      intentionalClosure = false;
+      connectWebSocket(newChatID, token);
+    }
+  }
+);
+
+
+  ws.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    message.message_id = message.message_id || message.id;
+
+    switch (message.type) {
+      case 'MESSAGE_ID':
+        const messageId = message.id;
+        console.log(`Received message ID: ${messageId}`);
+        break;
+
+      case 'MESSAGE_DELETED':
+        const deleteIndex = messages.value.findIndex(msg => msg.id == message.message_id);
+        if (deleteIndex !== -1) {
+          messages.value.splice(deleteIndex, 1);
+        }
+        break;
+
+      case 'STATUS_UPDATE':
+        if (message.chat_id === route.params.chatID && message.message_ids) {
+          message.message_ids.forEach((msgID) => {
+            const updateIndex = messages.value.findIndex(msg => msg.id == msgID);
+            if (updateIndex !== -1) {
+              messages.value[updateIndex].status = message.status;
+              console.log(`Message status updated to ${message.status} for message ID ${msgID}`);
+            } else {
+              console.log(`Message ID ${msgID} not found`);
+            }
+          });
+        } else {
+          console.log(`Chat ID mismatch or no message_ids in STATUS_UPDATE for chat ${message.chat_id}`);
+        }
+        break;
+
+      case 'STATUS_UPDATE_READ':
+        if (message.chat_id === route.params.chatID && message.username !== store.user.username) {
+          messages.value.forEach((msg) => {
+            if (msg.status !== 'read') {
+              msg.status = 'read';
+              console.log(`Message status updated to read for chat ${message.chat_id}`);
+            }
+          });
+        } else if (message.chat_id !== route.params.chatID) {
+          console.log(`Chat ID mismatch in STATUS_UPDATE_READ for chat ${message.chat_id}`);
+        } else {
+          console.log(`STATUS_UPDATE_READ received for sender's own message, no update needed`);
+        }
+        break;
+
+      default:
+        if (message.chat_id === route.params.chatID) {
+          if (message.username === store.user.username) {
+            const ownIndex = messages.value.findIndex(msg => msg.id == message.message_id);
+            if (ownIndex !== -1) {
+              messages.value[ownIndex].status = message.status;
+            } else {
+              console.log(`Message ID ${message.message_id} not found`);
+            }
+          } else {
+            if (!messages.value.some(msg => msg.id == message.message_id)) {
+              messages.value.push({
+                ...message,
+                isOwnMessage: message.username === store.user.username,
+                profile_picture: `/${message.profile_picture}`,
+                last_message: message.last_message,
+                file_url: message.file_url,
+                receiver: message.receiver,
+              });
+            }
+          }
+        }
+        break;
+    }
+      if (route.params.chatID === message.chat_id && message.username !== store.user.username && !notificationsRead) {
+        markChatNotificationsAsRead(message.chat_id);
+        notificationsRead = true; 
+      }
+  };
 
 };
 
