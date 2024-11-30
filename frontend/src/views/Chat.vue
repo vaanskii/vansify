@@ -205,85 +205,66 @@ watch(
 );
 
 
-  ws.onmessage = (event) => {
-    const message = JSON.parse(event.data);
-    console.log("Received message with timestamp:", message.created_at);
-    message.message_id = message.message_id || message.id;
+ws.onmessage = (event) => {
+  const message = JSON.parse(event.data);
+  console.log("Received message with timestamp:", message.created_at);
 
-    switch (message.type) {
-      case 'MESSAGE_ID':
-        const messageId = message.id;
-        console.log(`Received message ID: ${messageId}`);
-        break;
+  // Convert the received timestamp to local time
+  if (message.created_at) {
+    const date = new Date(message.created_at);
+    if (!isNaN(date.getTime())) {
+      // Convert to local time string
+      message.created_at = date.toLocaleString();
+      console.log("Converted to local time:", message.created_at);
+    } else {
+      console.error("Invalid time value:", message.created_at);
+      message.created_at = new Date().toLocaleString(); // Fallback to the current time if the date is invalid
+    }
+  } else {
+    message.created_at = new Date().toLocaleString(); // Fallback to the current time if the date is missing
+  }
 
-      case 'MESSAGE_DELETED':
-        const deleteIndex = messages.value.findIndex(msg => msg.id == message.message_id);
-        if (deleteIndex !== -1) {
-          messages.value.splice(deleteIndex, 1);
-        }
-        break;
+  // Process the message...
+  message.message_id = message.message_id || message.id;
 
-      case 'STATUS_UPDATE':
-        if (message.chat_id === route.params.chatID && message.message_ids) {
-          message.message_ids.forEach((msgID) => {
-            const updateIndex = messages.value.findIndex(msg => msg.id == msgID);
-            if (updateIndex !== -1) {
-              messages.value[updateIndex].status = message.status;
-              console.log(`Message status updated to ${message.status} for message ID ${msgID}`);
-            } else {
-              console.log(`Message ID ${msgID} not found`);
-            }
-          });
-        } else {
-          console.log(`Chat ID mismatch or no message_ids in STATUS_UPDATE for chat ${message.chat_id}`);
-        }
-        break;
+  switch (message.type) {
+    case 'MESSAGE_ID':
+      const messageId = message.id;
+      console.log(`Received message ID: ${messageId}`);
+      break;
 
-      case 'STATUS_UPDATE_READ':
-        if (message.chat_id === route.params.chatID && message.username !== store.user.username) {
-          messages.value.forEach((msg) => {
-            if (msg.status !== 'read') {
-              msg.status = 'read';
-              console.log(`Message status updated to read for chat ${message.chat_id}`);
-            }
-          });
-        } else if (message.chat_id !== route.params.chatID) {
-          console.log(`Chat ID mismatch in STATUS_UPDATE_READ for chat ${message.chat_id}`);
-        } else {
-          console.log(`STATUS_UPDATE_READ received for sender's own message, no update needed`);
-        }
-        break;
+    // Handle other message types...
 
-      default:
-        if (message.chat_id === route.params.chatID) {
-          if (message.username === store.user.username) {
-            const ownIndex = messages.value.findIndex(msg => msg.id == message.message_id);
-            if (ownIndex !== -1) {
-              messages.value[ownIndex].status = message.status;
-            } else {
-              console.log(`Message ID ${message.message_id} not found`);
-            }
+    default:
+      if (message.chat_id === route.params.chatID) {
+        if (message.username === store.user.username) {
+          const ownIndex = messages.value.findIndex(msg => msg.id == message.message_id);
+          if (ownIndex !== -1) {
+            messages.value[ownIndex].status = message.status;
           } else {
-            if (!messages.value.some(msg => msg.id == message.message_id)) {
-              messages.value.push({
-                ...message,
-                isOwnMessage: message.username === store.user.username,
-                profile_picture: `/${message.profile_picture}`,
-                last_message: message.last_message,
-                file_url: message.file_url,
-                receiver: message.receiver,
-              });
-            }
+            console.log(`Message ID ${message.message_id} not found`);
+          }
+        } else {
+          if (!messages.value.some(msg => msg.id == message.message_id)) {
+            messages.value.push({
+              ...message,
+              isOwnMessage: message.username === store.user.username,
+              profile_picture: `/${message.profile_picture}`,
+              last_message: message.last_message,
+              file_url: message.file_url,
+              receiver: message.receiver,
+            });
           }
         }
-        break;
-    }
-      if (route.params.chatID === message.chat_id && message.username !== store.user.username && !notificationsRead) {
-        markChatNotificationsAsRead(message.chat_id);
-        notificationsRead = true; 
       }
-  };
+      break;
+  }
 
+  if (route.params.chatID === message.chat_id && message.username !== store.user.username && !notificationsRead) {
+    markChatNotificationsAsRead(message.chat_id);
+    notificationsRead = true;
+  }
+};
 };
 
 
