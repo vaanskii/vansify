@@ -52,6 +52,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { userStore } from '@/stores/user';
 import emitter from '@/eventBus';
 import notify from '@/utils/notify';
+import moment from 'moment/moment';
 
 const apiUrl = import.meta.env.VITE_WS_URL;
 const messages = ref([]);
@@ -285,9 +286,6 @@ watch(
   };
 
 };
-
-
-import moment from 'moment';
 
 const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
   try {
