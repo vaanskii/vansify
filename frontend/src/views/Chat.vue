@@ -31,7 +31,7 @@
             <span v-if="message.status === 'read'">(Read)</span>
             <span v-if="message.status === 'sending'">(Sending...)</span> -->
           </span>
-          <span>{{ message.created_at }}</span>
+          <span>{{ formatTime(message.created_at) }}</span>
           <button v-if="message.isOwnMessage" @click="deleteMessage(message.id)" class="delete-button">Delete</button>
         </div>
       </div>
@@ -289,6 +289,7 @@ watch(
 
 const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
   try {
+    console.log('Fetching chat history for chatID:', chatID, 'with limit:', limit, 'and offset:', offset);
     const response = await axios.get(`/v1/chat/${chatID}/history`, {
       headers: {
         Authorization: `Bearer ${store.user.access}`
@@ -299,23 +300,34 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
         offset
       }
     });
+    console.log('Response received:', response.data);
+
     if (response.data) {
-      const newMessages = response.data.map(message => ({
-        ...message,
-        isOwnMessage: message.username === username,
-        status: message.status,
-        time: new Date(message.created_at), 
-        profile_picture: `/${message.profile_picture}`
-      }));
+      const newMessages = response.data.map(message => {
+        // Convert the fetched UTC timestamp to local time
+        const localTime = new Date(message.created_at).toLocaleString();
+        console.log('Processing message:', message);
+        console.log('Converted time:', localTime);
+        
+        return {
+          ...message,
+          isOwnMessage: message.username === username,
+          status: message.status,
+          time: localTime, // Use converted local time
+          profile_picture: `/${message.profile_picture}`
+        };
+      });
 
       const existingMessageIds = new Set(messages.value.map(msg => msg.id));
       newMessages.forEach(newMessage => {
         if (!existingMessageIds.has(newMessage.id)) {
+          console.log('Adding new message:', newMessage);
           messages.value.unshift(newMessage);
         }
       });
 
       messages.value.sort((a, b) => new Date(a.time) - new Date(b.time));
+      console.log('Sorted messages:', messages.value);
 
       if (newMessages.length < limit) {
         hasMoreMessages.value = false; 
@@ -328,6 +340,7 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
     if (offset === 0) isLoading.value = false;
   }
 };
+
 
 
 const markChatNotificationsAsRead = async (chatID) => {
@@ -458,7 +471,7 @@ const sendMessage = async () => {
   let messageToSend = {
     username,
     message: newMessage.value || "Sent a file",
-    created_at: new Date().toLocaleString(),
+    created_at: new Date().toISOString(),
     isOwnMessage: true,
   };
 
