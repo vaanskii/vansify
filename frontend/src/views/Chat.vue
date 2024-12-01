@@ -31,7 +31,7 @@
             <span v-if="message.status === 'read'">(Read)</span>
             <span v-if="message.status === 'sending'">(Sending...)</span> -->
           </span>
-          <span>{{ formatTime(message.created_at) }}</span>
+          <span>{{ message.created_at }}</span>
           <button v-if="message.isOwnMessage" @click="deleteMessage(message.id)" class="delete-button">Delete</button>
         </div>
       </div>
@@ -458,9 +458,11 @@ const sendMessage = async () => {
   let messageToSend = {
     username,
     message: newMessage.value || "Sent a file",
-    created_at: new Date().toISOString(),
+    created_at: new Date().toLocaleString(),
     isOwnMessage: true,
   };
+
+  console.log("message to send",messageToSend)
 
   if (selectedFile.value) {
     notify("Senting image...", "info");
