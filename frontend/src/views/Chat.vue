@@ -34,16 +34,19 @@
         </div>
       </div>
     </div>
-      <form @submit.prevent="sendMessage" v-if="!isLoading" class="message-form">
-        <textarea v-model="newMessage" placeholder="Type a message" class="message-input" rows="1" @input="adjustTextareaHeight" @keydown="handleKeyDown"></textarea>
-        <div class="fileUpload" @click="triggerFileInput">
-          <input type="file" class="upload" ref="fileInput" @change="onFileSelected" accept="image/*" style="display: none;"/>
-          <i class="fa-solid fa-image fa-lg"></i>
-        </div>
-        <button type="submit" class="send-button">
-                <i class="fa-solid fa-paper-plane fa-lg"></i>
-        </button>
-      </form>
+      <div class="form-container">
+        <form @submit.prevent="sendMessage" v-if="!isLoading" class="message-form">
+          <textarea v-model="newMessage" placeholder="Type a message" class="message-input" rows="1" @input="adjustTextareaHeight" @keydown="handleKeyDown"></textarea>
+          <div class="fileUpload" @click="triggerFileInput">
+            <input type="file" class="upload" ref="fileInput" @change="onFileSelected" accept="image/*" style="display: none;"/>
+            <i class="fa-solid fa-image fa-lg"></i>
+          </div>
+          <button type="submit" class="send-button">
+                  <i class="fa-solid fa-paper-plane fa-lg"></i>
+          </button>
+        </form>
+      </div>
+
     </div>
   </div>
 </template>
