@@ -108,7 +108,7 @@ const routes = [
     meta: {
       title: 'Choose Username',
     }
-  }
+  },
 ];
 
 const router = createRouter({
@@ -116,12 +116,13 @@ const router = createRouter({
   routes
 });
 
-// Navigation guard to update document title and check authentication
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const store = userStore();
-  const isAuthenticated = store.user.isAuthenticated;
+  const isAuthenticated = await store.user.isAuthenticated;
 
   if (to.matched.some(record => record.meta.requiresAuth) && !isAuthenticated) {
+    next({ name: 'login' });
+  } else if (to.name === 'home' && !isAuthenticated) {
     next({ name: 'login' });
   } else {
     if ((to.name === 'login' || to.name === 'register') && isAuthenticated) {
