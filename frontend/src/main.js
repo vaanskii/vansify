@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import { userStore } from '@/stores/user';
 import axios from 'axios';
+import "@/assets/main.css"
 
 import App from './App.vue'
 import router from './router'

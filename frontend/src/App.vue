@@ -1,6 +1,8 @@
 <template>
-  <navigation />
-  <router-view />
+  <div class="layout">
+    <navigation class="navigation" />
+    <router-view />
+  </div>
 </template>
 
 <script setup>
@@ -50,3 +52,37 @@ watch(
   }
 );
 </script>
+
+<style>
+.layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.navigation {
+  width: 100%;
+}
+
+@media (min-width: 769px) {
+  .navigation {
+    position: relative;
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .navigation {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    z-index: 10;
+  }
+}
+
+.router-view {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding-bottom: 60px;
+}
+</style>

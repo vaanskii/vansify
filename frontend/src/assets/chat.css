@@ -1,0 +1,183 @@
+.chat-container {
+  display: flex;
+  justify-content: center;
+}
+
+.chat-box-container {
+  max-width: 1000px;
+  width: 90%;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  background-color: #f9f9f9;
+  max-height: 100vh;
+  height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
+}
+
+.loader {
+  text-align: center;
+  padding: 10px;
+  font-size: 16px;
+  color: #666;
+}
+
+.no-messages {
+  text-align: center;
+  color: #888;
+}
+
+.messages-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-grow: 1;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+
+.message {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border-radius: 10px;
+  word-wrap: break-word;
+  max-width: 60%;
+}
+
+.sent {
+  align-self: flex-end;
+  background-color: #daf8cb;
+}
+
+.received {
+  align-self: flex-start;
+  background-color: #e4e6eb;
+}
+
+.sent-image {
+  align-self: flex-end;
+  background-color: #daf8cb;
+}
+
+.received-image {
+  align-self: flex-start;
+  background-color: #e4e6eb;
+}
+
+.uploaded-image {
+  width: 150px;
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.profile-picture {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  margin-right: 10px;
+}
+
+.message-body {
+  font-size: 14px;
+}
+
+.message-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #888;
+}
+
+.message-form {
+  display: flex;
+  max-width: 100%;
+}
+
+.upload-send-buttons {
+  display: flex;
+  flex-direction: row;
+}
+
+.message-input {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  margin-right: 10px;
+  width: 100%;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.5;
+}
+
+.message-input:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+.send-button {
+  background-color: transparent;
+  color: black;
+  border: none;
+  padding: 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.send-button:hover {
+  background-color: #f0f0f0;
+}
+
+.fileUpload {
+  color: black;
+  overflow: hidden;
+  cursor: pointer;
+  padding-left: 7px;
+  padding-right: 7px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.fileUpload:hover, .fileUpload:active, .fileUpload:focus {
+  background: #f0f0f0;
+  border-radius: 50px;
+  cursor: pointer;
+}
+
+input[type="file"] {
+  position: fixed;
+  right: 100%;
+  bottom: 100%;
+}
+
+.delete-button {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 5px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.delete-button:hover {
+  background-color: #c82333;
+}
+
+@media (max-width: 768px) {
+  .chat-container {
+    overflow: hidden !important;
+  }
+  .chat-box-container {
+    height: calc(100vh - 100px);
+    width: 100%;
+    border:none;
+    background-color: transparent;
+  }
+}

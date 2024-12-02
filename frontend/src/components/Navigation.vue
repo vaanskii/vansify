@@ -1,40 +1,53 @@
 <template>
-  <nav class="navbar">
-    <div v-if="store.user.isAuthenticated">
-      <router-link class="nav-link" to="/">Home</router-link>
-      <router-link v-if="store.user.isAuthenticated" to="/inbox" class="nav-link">
-        My Chats
+  <div>
+    <nav v-if="store.user.isAuthenticated && !isChatRoute" class="navbar">
+      <router-link class="nav-link" to="/">
+        <i class="fa-solid fa-house fa-lg"></i>
+      </router-link>
+      <router-link to="/inbox" class="nav-link">
+        <i v-if="unreadCount > 0" class="fa-solid fa-comment fa-lg"></i>
+        <i v-else class="fa-regular fa-comment fa-lg"></i>
         <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
       </router-link>
-      <router-link v-if="store.user.isAuthenticated" to="/notifications" class="nav-link">
-        Notifications
+      <router-link to="/notifications" class="nav-link">
+        <i v-if="unreadNotificationCount > 0" class="fa-solid fa-bell fa-lg"></i>
+        <i v-else class="fa-regular fa-bell fa-lg"></i>
         <span v-if="unreadNotificationCount > 0" class="badge">{{ unreadNotificationCount }}</span>
       </router-link>
-      <router-link v-if="store.user.isAuthenticated" :to="`/${store.user.username}`" class="nav-link">
-        {{ store.user.username }}
+      <router-link :to="`/${store.user.username}`" class="nav-link">
+        <i class="fa-solid fa-user fa-lg"></i>
+        <!-- {{ store.user.username }} -->
       </router-link>
-      <button v-if="store.user.isAuthenticated" @click="logout" class="nav-button">Logout</button>
-    </div>
-    <div v-else>
-      <router-link to="/login" class="nav-link">Login</router-link>
-      <router-link to="/register" class="nav-link">Register</router-link>
-    </div>
-  </nav>
+      <button @click="logout" class="nav-button">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+      </button>
+    </nav>
+  </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { userStore } from '@/stores/user';
 import axios from 'axios';
 import emitter from '@/eventBus';
 
 const store = userStore();
 const router = useRouter();
+const route = useRoute();
 const unreadCount = ref(0);
 const unreadNotificationCount = ref(0);
 const wsConnected = ref(false);
 const loader = ref(true);
+
+const isMobile = ref(window.innerWidth <= 768);
+const isChatRoute = computed(() => {
+  return route.path.startsWith('/inbox/') && isMobile.value;
+});
+
+const updateIsMobile = () => {
+  isMobile.value = window.innerWidth <= 768;
+};
 
 const fetchChatUnreadCount = async () => {
   if (store.user.isAuthenticated) {
@@ -126,6 +139,7 @@ onMounted(() => {
   emitter.on('chat-updated', fetchChatUnreadCount);
   emitter.on('chat-read', fetchChatUnreadCount);
 
+  window.addEventListener('resize', updateIsMobile);
   if (store.user.isAuthenticated) {
     fetchChatUnreadCount();
     fetchUnreadNotificationCount();
@@ -142,41 +156,46 @@ watch(
   }
 );
 
+watch(route, (newRoute) => {
+  if (isMobile.value && newRoute.path.startsWith('/inbox/')) {
+    // Hide navigation for chat view on mobile
+    console.log('Navigated to chat view on mobile');
+  } else {
+    // Show navigation for other views
+    console.log('Navigated away from chat view');
+  }
+});
+
 onUnmounted(() => {
   emitter.off('chat-ws-open', handleWebSocketOpen);
   emitter.off('chat-ws-message', handleWebSocketMessage);
   emitter.off('chat-ws-error', handleWebSocketError);
   emitter.off('chat-ws-close', handleWebSocketClose);
 
-  emitter.off('ws-open', handleWebSocketOpen);
-  emitter.off('ws-message', handleWebSocketMessage);
-  emitter.off('ws-error', handleWebSocketError);
-  emitter.off('ws-close', handleWebSocketClose);
+  emitter.off('global-ws-open', handleWebSocketOpen);
+  emitter.off('global-ws-message', handleWebSocketMessage);
+  emitter.off('global-ws-error', handleWebSocketError);
+  emitter.off('global-ws-close', handleWebSocketClose);
 
   emitter.off('notification-updated', fetchUnreadNotificationCount);
   emitter.off('chat-updated', fetchChatUnreadCount);
   emitter.off('chat-read', fetchChatUnreadCount);
+
+  window.removeEventListener('resize', updateIsMobile);
 });
 </script>
-
 
 <style scoped>
 .navbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   background-color: #333;
   padding: 10px;
-}
-
-.nav-link {
-  color: white;
-  text-decoration: none;
-  margin: 0 10px;
-}
-
-.nav-link:hover {
-  text-decoration: underline;
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .nav-button {
@@ -192,12 +211,29 @@ onUnmounted(() => {
   background-color: #ff1a1a;
 }
 
+.nav-link {
+  position: relative;
+  color: white;
+  text-decoration: none;
+  margin: 0 10px;
+}
+
+.nav-link.router-link-active i {
+  color: red;
+}
+
+.nav-link:hover {
+  text-decoration: underline;
+}
+
 .badge {
+  position: absolute;
+  top: -10px;
+  right: -8px;
   background-color: #ff4d4d;
   border-radius: 12px;
-  padding: 2px 8px;
+  padding: 2px 6px;
   color: white;
-  font-size: 0.8em;
-  margin-left: 5px;
+  font-size: 0.5em;
 }
 </style>

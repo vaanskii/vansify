@@ -1,7 +1,8 @@
 <template>
   <div class="chat-container">
-    <h2>Chat with {{ chatUser }}</h2>
-    <div v-if="formattedMessages.length === 0 && !isLoading" class="no-messages">No messages yet</div>
+    <div class="chat-box-container">
+      <div v-if="formattedMessages.length === 0 && !isLoading" class="no-messages">No messages yet</div>
+      <h2>Chat with {{ chatUser }}</h2>
     <div v-if="!isLoading" class="messages-container" ref="messagesContainer">
       <div v-if="loadingOlderMessages" class="loader">Loading...</div>
       <div v-for="message in formattedMessages" :key="message.id" 
@@ -27,23 +28,25 @@
         <div class="message-footer">
           <span v-if="message.isOwnMessage">
             <span v-if="message.status">({{ message.status }})</span> 
-            <!-- <span v-if="message.status === 'delivered'">(Delivered)</span>
-            <span v-if="message.status === 'read'">(Read)</span>
-            <span v-if="message.status === 'sending'">(Sending...)</span> -->
           </span>
           <span>{{ formatTime(message.created_at) }}</span>
           <button v-if="message.isOwnMessage" @click="deleteMessage(message.id)" class="delete-button">Delete</button>
         </div>
       </div>
     </div>
-    <form @submit.prevent="sendMessage" v-if="!isLoading" class="message-form">
-      <input v-model="newMessage" placeholder="Type a message" class="message-input" />
-      <input type="file" ref="fileInput" @change="onFileSelected" accept="image/*" />
-      <button type="submit" class="send-button">Send</button>
-    </form>
+      <form @submit.prevent="sendMessage" v-if="!isLoading" class="message-form">
+        <textarea v-model="newMessage" placeholder="Type a message" class="message-input" rows="1" @input="adjustTextareaHeight" @keydown="handleKeyDown"></textarea>
+        <div class="fileUpload" @click="triggerFileInput">
+          <input type="file" class="upload" ref="fileInput" @change="onFileSelected" accept="image/*" style="display: none;"/>
+          <i class="fa-solid fa-image fa-lg"></i>
+        </div>
+        <button type="submit" class="send-button">
+                <i class="fa-solid fa-paper-plane fa-lg"></i>
+        </button>
+      </form>
+    </div>
   </div>
 </template>
-
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
@@ -52,6 +55,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { userStore } from '@/stores/user';
 import emitter from '@/eventBus';
 import notify from '@/utils/notify';
+import "@/assets/chat.css"
 
 const apiUrl = import.meta.env.VITE_WS_URL;
 const messages = ref([]);
@@ -304,16 +308,14 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
 
     if (response.data) {
       const newMessages = response.data.map(message => {
-        // Convert the fetched UTC timestamp to local time
         const localTime = new Date(message.created_at).toLocaleString();
-        console.log('Processing message:', message);
         console.log('Converted time:', localTime);
         
         return {
           ...message,
           isOwnMessage: message.username === username,
           status: message.status,
-          time: localTime, // Use converted local time
+          time: localTime,
           profile_picture: `/${message.profile_picture}`
         };
       });
@@ -321,7 +323,6 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
       const existingMessageIds = new Set(messages.value.map(msg => msg.id));
       newMessages.forEach(newMessage => {
         if (!existingMessageIds.has(newMessage.id)) {
-          console.log('Adding new message:', newMessage);
           messages.value.unshift(newMessage);
         }
       });
@@ -429,7 +430,31 @@ onUnmounted(() => {
   }
 });
 
+const handleKeyDown = (event) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    sendMessage();
+  } else {
+    adjustTextareaHeight(event);
+  }
+};
 
+
+const adjustTextareaHeight = (event) => {
+  const textarea = event.target;
+  textarea.style.height = 'auto';
+  textarea.style.height = textarea.scrollHeight + 'px';
+
+  const maxHeight = 150;
+  if (textarea.scrollHeight > maxHeight) {
+    textarea.style.height = maxHeight + 'px';
+    textarea.style.overflowY = 'auto';
+  }
+};
+
+const triggerFileInput = () => {
+  fileInput.value.click();
+};
 
 const onFileSelected = (event) => {
   selectedFile.value = event.target.files[0];
@@ -464,27 +489,30 @@ const uploadFile = async (file) => {
 };
 
 const sendMessage = async () => {
-  if (!newMessage.value && !selectedFile.value) {
+  const trimmedMessage = newMessage.value.trim();
+
+  // Only proceed if there's text or an image
+  if (!trimmedMessage && !selectedFile.value) {
     return;
   }
 
   let messageToSend = {
     username,
-    message: newMessage.value || "Sent a file",
+    message: trimmedMessage || "Sent a file",
     created_at: new Date().toISOString(),
     isOwnMessage: true,
   };
 
-  console.log("message to send",messageToSend)
+  console.log("message to send", messageToSend);
 
   if (selectedFile.value) {
-    notify("Senting image...", "info");
+    notify("Sending image...", "info");
     try {
       const fileURL = await uploadFile(selectedFile.value);
       messageToSend.file_url = fileURL;
       selectedFile.value = null;
       fileInput.value.value = "";
-      notify("Image sented!", "success");
+      notify("Image sent!", "success");
     } catch (error) {
       notify("Failed to upload file.", "error");
       return;
@@ -517,9 +545,11 @@ const sendMessage = async () => {
   } else {
     saveOfflineMessages();
   }
+
   newMessage.value = '';
   nextTick(scrollToBottom);
 };
+
 
 
 watch(isConnected, (newVal) => {
@@ -539,134 +569,3 @@ watch(messages, () => {
   nextTick(scrollToBottom)
 });
 </script>
-
-<style scoped>
-.chat-container {
-  display: flex;
-  flex-direction: column;
-  width: 800px;
-  margin: 0 auto;
-  padding: 20px;
-  border: 1px solid #ccc;
-  border-radius: 10px;
-  background-color: #f9f9f9;
-  margin-top: 200px;
-}
-
-.loader {
-  text-align: center;
-  padding: 10px;
-  font-size: 16px;
-  color: #666;
-}
-
-
-.no-messages {
-  text-align: center;
-  color: #888;
-}
-
-.messages-container {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  height: 400px;
-  overflow-y: auto;
-  margin-bottom: 10px;
-}
-
-.message {
-  display: flex;
-  flex-direction: column;
-  padding: 10px;
-  border-radius: 10px;
-  word-wrap: break-word;
-  max-width: 60%;
-}
-
-.sent {
-  align-self: flex-end;
-  background-color: #daf8cb;
-}
-
-.received {
-  align-self: flex-start;
-  background-color: #e4e6eb;
-}
-
-.sent-image {
-  align-self: flex-end;
-  background-color: #daf8cb;
-}
-
-.received-image {
-  align-self: flex-start;
-  background-color: #e4e6eb;
-}
-
-.uploaded-image{
-  width: 150px;
-}
-
-.message-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 5px;
-}
-
-.profile-picture {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  margin-right: 10px;
-}
-
-.message-body {
-  font-size: 14px;
-}
-
-.message-footer {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: #888;
-}
-
-.message-form {
-  display: flex;
-}
-
-.message-input {
-  flex-grow: 1;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 10px;
-  margin-right: 10px;
-}
-
-.send-button {
-  background-color: #007bff;
-  color: white;
-  border: none;
-  padding: 10px;
-  border-radius: 10px;
-  cursor: pointer;
-}
-
-.send-button:hover {
-  background-color: #0056b3;
-}
-
-.delete-button {
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  padding: 5px;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.delete-button:hover {
-  background-color: #c82333;
-}
-</style>
