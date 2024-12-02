@@ -326,9 +326,12 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
       const existingMessageIds = new Set(messages.value.map(msg => msg.id));
       newMessages.forEach(newMessage => {
         if (!existingMessageIds.has(newMessage.id)) {
-          messages.value.push(newMessage);
+          messages.value.unshift(newMessage);
         }
       });
+
+      messages.value.sort((a, b) => new Date(a.time) - new Date(b.time));
+      console.log('Sorted messages:', messages.value);
 
       if (newMessages.length < limit) {
         hasMoreMessages.value = false; 
