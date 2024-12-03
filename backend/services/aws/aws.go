@@ -27,11 +27,11 @@ import (
 var sess *session.Session
 
 func InitAWSSession() {
-    err := godotenv.Load()
-    if err != nil {
+    if err := godotenv.Load(); err != nil {
         log.Printf("Error loading .env file: %v", err)
     }
 
+    var err error
     sess, err = session.NewSession(&aws.Config{
         Region: aws.String(os.Getenv("AWS_REGION")),
         Credentials: credentials.NewStaticCredentials(
@@ -42,8 +42,9 @@ func InitAWSSession() {
     })
     if err != nil {
         log.Printf("Unable to initialize AWS session: %v", err)
+    } else {
+        log.Println("AWS session initialized successfully.")
     }
-    log.Println("AWS session initialized successfully.")
 }
 
 func UploadFile(c *gin.Context) {
@@ -52,18 +53,15 @@ func UploadFile(c *gin.Context) {
     c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
     c.Header("Access-Control-Expose-Headers", "Content-Length, ETag")
 
-    envErr := godotenv.Load()
-    if envErr != nil {
-        log.Printf("Error loading .env file: %v", envErr)
+    if err := godotenv.Load(); err != nil {
+        log.Printf("Error loading .env file: %v", err)
     }
 
     var folderName string
     if chatID := c.Param("chatid"); chatID != "" {
         folderName = "chat/" + chatID
-        log.Printf("Chat ID provided: %s", chatID)
     } else if username := c.Param("username"); username != "" {
         folderName = "profile/" + username
-        log.Printf("Username provided: %s", username)
     } else {
         c.String(http.StatusBadRequest, "Invalid request: missing folder identifier")
         return
@@ -86,8 +84,7 @@ func UploadFile(c *gin.Context) {
     buf := new(bytes.Buffer)
     switch format {
     case "jpeg", "jpg":
-        options := jpeg.Options{Quality: 75}
-        err = jpeg.Encode(buf, resizedImage, &options)
+        err = jpeg.Encode(buf, resizedImage, &jpeg.Options{Quality: 75})
     case "png":
         err = png.Encode(buf, resizedImage)
     case "gif":
@@ -109,23 +106,17 @@ func UploadFile(c *gin.Context) {
     svc := s3.New(sess)
     bucketName := os.Getenv("AWS_BUCKET_NAME")
 
-    timestamp := time.Now().Unix()
-    uniqueFilename := fmt.Sprintf("%d_%s", timestamp, filepath.Base(header.Filename))
+    uniqueFilename := fmt.Sprintf("%d_%s", time.Now().Unix(), filepath.Base(header.Filename))
     key := fmt.Sprintf("%s/%s", folderName, uniqueFilename)
 
-    var contentType string
-    switch format {
-    case "jpeg", "jpg":
-        contentType = "image/jpeg"
-    case "png":
-        contentType = "image/png"
-    case "gif":
-        contentType = "image/gif"
-    case "bmp":
-        contentType = "image/bmp"
-    case "tiff":
-        contentType = "image/tiff"
-    }
+    contentType := map[string]string{
+        "jpeg": "image/jpeg",
+        "jpg":  "image/jpeg",
+        "png":  "image/png",
+        "gif":  "image/gif",
+        "bmp":  "image/bmp",
+        "tiff": "image/tiff",
+    }[format]
 
     _, err = svc.PutObject(&s3.PutObjectInput{
         Bucket:             aws.String(bucketName),
@@ -142,7 +133,6 @@ func UploadFile(c *gin.Context) {
 
     // Generate file URL
     fileURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", bucketName, os.Getenv("AWS_REGION"), key)
-    log.Printf("Generated S3 file URL: %s", fileURL)
 
     c.JSON(http.StatusOK, gin.H{
         "fileName": uniqueFilename,
