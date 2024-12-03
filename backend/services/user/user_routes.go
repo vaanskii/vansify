@@ -50,55 +50,52 @@ func GetUserByUsername(c *gin.Context) {
     profile := UserProfile{
         ID:             user.ID,
         Username:       user.Username,
-        ProfilePicture:  user.ProfilePicture,
+        ProfilePicture: user.ProfilePicture,
         Gender:         user.Gender,
         OauthUser:      user.OauthUser,
     }
 
-    // Fetch follower count
-    err = db.DB.QueryRow("SELECT COUNT(*) FROM followers WHERE following_id = ?", user.ID).Scan(&profile.FollowersCount)
+    // Fetch follower count and following count in one query using subqueries
+    err = db.DB.QueryRow(`
+        SELECT 
+            (SELECT COUNT(*) FROM followers WHERE following_id = ?) AS followers_count,
+            (SELECT COUNT(*) FROM followers WHERE follower_id = ?) AS followings_count
+        `, user.ID, user.ID).Scan(&profile.FollowersCount, &profile.FollowingsCount)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching followers count"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching followers and followings count"})
         return
     }
 
-    // Fetch following count
-    err = db.DB.QueryRow("SELECT COUNT(*) FROM followers WHERE follower_id = ?", user.ID).Scan(&profile.FollowingsCount)
+    // Fetch followers and followings in one query using UNION
+    query := `
+        SELECT u.id, u.username, 'follower' AS relation FROM followers f JOIN users u ON f.follower_id = u.id WHERE f.following_id = ?
+        UNION ALL
+        SELECT u.id, u.username, 'following' AS relation FROM followers f JOIN users u ON f.following_id = u.id WHERE f.follower_id = ?
+    `
+    rows, err := db.DB.Query(query, user.ID, user.ID)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching followings count"})
-        return
-    }
-
-    // Fetch followers
-    rows, err := db.DB.Query("SELECT u.id, u.username FROM followers f JOIN users u ON f.follower_id = u.id WHERE f.following_id = ?", user.ID)
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching followers"})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching followers and followings"})
         return
     }
     defer rows.Close()
+
     for rows.Next() {
-        var follower Follower
-        if err := rows.Scan(&follower.ID, &follower.Username); err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning follower"})
+        var id int
+        var username, relation string
+        if err := rows.Scan(&id, &username, &relation); err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning follower/following"})
             return
         }
-        profile.Followers = append(profile.Followers, follower)
+        if relation == "follower" {
+            profile.Followers = append(profile.Followers, Follower{ID: id, Username: username})
+        } else {
+            profile.Followings = append(profile.Followings, Following{ID: id, Username: username})
+        }
     }
 
-    // Fetch followings
-    rows, err = db.DB.Query("SELECT u.id, u.username FROM followers f JOIN users u ON f.following_id = u.id WHERE f.follower_id = ?", user.ID)
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching followings"})
+    if err := rows.Err(); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error iterating through followers/followings"})
         return
-    }
-    defer rows.Close()
-    for rows.Next() {
-        var following Following
-        if err := rows.Scan(&following.ID, &following.Username); err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning following"})
-            return
-        }
-        profile.Followings = append(profile.Followings, following)
     }
 
     c.JSON(http.StatusOK, profile)
@@ -124,19 +121,23 @@ func GetUserChats(c *gin.Context) {
         return
     }
 
-    rows, err := db.DB.Query(`
+    query := `
         SELECT 
             c.chat_id, 
             c.user1, 
             c.user2, 
             COALESCE(c.deleted_for, '') AS deleted_for, 
             COALESCE(MAX(m.created_at), '') AS last_message_time,
-            COALESCE((SELECT message FROM messages WHERE chat_id = c.chat_id AND (deleted_for IS NULL OR deleted_for NOT LIKE ?) ORDER BY created_at DESC LIMIT 1), '') AS last_message
+            COALESCE((SELECT message FROM messages WHERE chat_id = c.chat_id AND (deleted_for IS NULL OR deleted_for NOT LIKE ?) ORDER BY created_at DESC LIMIT 1), '') AS last_message,
+            (SELECT profile_picture FROM users u WHERE u.username = CASE WHEN c.user1 = ? THEN c.user2 ELSE c.user1 END) AS profile_picture,
+            (SELECT COUNT(*) FROM chat_notifications WHERE user_id = ? AND chat_id = c.chat_id AND is_read = false) AS unread_count
         FROM chats c
         LEFT JOIN messages m ON c.chat_id = m.chat_id
-        WHERE (c.user1 = ? OR c.user2 = ?) 
+        WHERE (c.user1 = ? OR c.user2 = ?)
         GROUP BY c.chat_id, c.user1, c.user2, c.deleted_for
-        HAVING last_message IS NOT NULL`, "%"+username+"%", username, username)
+        HAVING last_message IS NOT NULL`
+    
+    rows, err := db.DB.Query(query, "%"+username+"%", username, userID, username, username)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching user chats"})
         return
@@ -145,10 +146,11 @@ func GetUserChats(c *gin.Context) {
 
     var chats []map[string]interface{}
     for rows.Next() {
-        var chatID, user1, user2, deletedFor string
+        var chatID, user1, user2, deletedFor, profilePicture string
         var lastMessageTime, lastMessage sql.NullString
+        var unreadCount int
 
-        if err := rows.Scan(&chatID, &user1, &user2, &deletedFor, &lastMessageTime, &lastMessage); err != nil {
+        if err := rows.Scan(&chatID, &user1, &user2, &deletedFor, &lastMessageTime, &lastMessage, &profilePicture, &unreadCount); err != nil {
             c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning chat"})
             return
         }
@@ -162,21 +164,6 @@ func GetUserChats(c *gin.Context) {
             otherUser = user2
         }
 
-        // Fetch the profile picture of the other user
-        var profilePicture string
-        err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", otherUser).Scan(&profilePicture)
-        if err != nil {
-            profilePicture = ""
-        }
-
-        // Get unread message count for each chat
-        var unreadCount int
-        err = db.DB.QueryRow("SELECT COUNT(*) FROM chat_notifications WHERE user_id = ? AND chat_id = ? AND is_read = false", userID, chatID).Scan(&unreadCount)
-        if err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching unread count"})
-            return
-        }
-
         chats = append(chats, map[string]interface{}{
             "chat_id":            chatID,
             "user":               otherUser,
@@ -185,6 +172,11 @@ func GetUserChats(c *gin.Context) {
             "profile_picture":    profilePicture,
             "last_message":       lastMessage.String, 
         })
+    }
+
+    if err := rows.Err(); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error iterating through chats"})
+        return
     }
 
     c.JSON(http.StatusOK, gin.H{"chats": chats})
@@ -215,17 +207,17 @@ func GetActiveUsersHandler(c *gin.Context) {
 
     authenticatedUsername := customClaims.Username
 
+    rows, err := db.DB.Query("SELECT username, profile_picture FROM users WHERE active = true AND username != ?", authenticatedUsername)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving active users"})
+        return
+    }
+    defer rows.Close()
+
     var activeUsers []struct {
         Username       string `json:"username"`
         ProfilePicture string `json:"profile_picture"`
     }
-
-    rows, err := db.DB.Query("SELECT username, profile_picture FROM users WHERE active = true")
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
-    defer rows.Close()
 
     for rows.Next() {
         var user struct {
@@ -233,16 +225,14 @@ func GetActiveUsersHandler(c *gin.Context) {
             ProfilePicture string `json:"profile_picture"`
         }
         if err := rows.Scan(&user.Username, &user.ProfilePicture); err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning active user"})
             return
         }
-
-        if user.Username != authenticatedUsername {
-            activeUsers = append(activeUsers, user)
-        }
+        activeUsers = append(activeUsers, user)
     }
+
     if err := rows.Err(); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error iterating through active users"})
         return
     }
 
