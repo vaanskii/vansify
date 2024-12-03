@@ -68,12 +68,6 @@ func RegisterUser(c *gin.Context) {
         c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid gender value"})
         return
     }
-
-    if user.Gender == "male" {
-        user.ProfilePicture = "assets/images/man-picture.jpg"
-    } else {
-        user.ProfilePicture = "assets/images/woman-picture.jpg"
-    }
     
     if user.Password == "" {
         c.JSON(http.StatusBadRequest, gin.H{"error": "Password is required"})
@@ -86,6 +80,11 @@ func RegisterUser(c *gin.Context) {
     if user.Email == "" {
         c.JSON(http.StatusBadRequest, gin.H{"error": "Email is required"})
         return
+    }
+
+    // Set default profile picture if not provided
+    if user.ProfilePicture == "" {
+        user.ProfilePicture = "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png"
     }
 
     // Check if username already exists
@@ -142,40 +141,30 @@ func RegisterUser(c *gin.Context) {
 
 // LoginUser handles user login
 func LoginUser(c *gin.Context) {
-    log.Println("LoginUser called")
-
     var request struct {
         Username   string `json:"username"`
         Password   string `json:"password"`
         RememberMe bool   `json:"remember_me"`
     }
     if err := c.ShouldBindJSON(&request); err != nil {
-        log.Println("Error binding JSON:", err)
         c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
         return
     }
 
-    log.Printf("Login request received for username: %s", request.Username)
-
     row := db.DB.QueryRow("SELECT id, username, email, password, verified FROM users WHERE username = ?", request.Username)
     var dbUser models.User
     if err := row.Scan(&dbUser.ID, &dbUser.Username, &dbUser.Email, &dbUser.Password, &dbUser.Verified); err != nil {
-        log.Println("Error finding user:", err)
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
         return
     }
 
-    log.Printf("User found: %s", dbUser.Username)
-
     // Check password
     if !dbUser.CheckPassword(request.Password) {
-        log.Println("Invalid password")
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
         return
     }
 
     if !dbUser.Verified {
-        log.Println("User not verified")
         c.JSON(http.StatusForbidden, gin.H{"error": "Please verify your email before logging in."})
         return
     }
@@ -183,29 +172,25 @@ func LoginUser(c *gin.Context) {
     // Generate tokens
     accessToken, err := utils.GenerateAccessToken(request.Username, dbUser.Email)
     if err != nil {
-        log.Println("Error generating access token:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating access token"})
         return
     }
     refreshToken, err := utils.GenerateRefreshToken(request.Username, dbUser.Email)
     if err != nil {
-        log.Println("Error generating refresh token:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating refresh token"})
         return
     }
 
     if request.RememberMe {
-        log.Println("Setting refresh token cookie")
         c.SetCookie("refresh_token", refreshToken, 7*24*3600, "/", "", false, true)
     }
 
-    log.Printf("Updating active status for user: %s", dbUser.Username)
     _, err = db.DB.Exec("UPDATE users SET active = true, last_active = NULL WHERE username = ?", dbUser.Username)
     if err != nil {
+        // Log the error but don't stop the login process
         log.Println("Error updating user active status:", err)
     }
 
-    log.Println("Login successful, sending response")
     c.JSON(http.StatusOK, gin.H{
         "access_token": accessToken,
         "refresh_token": refreshToken,
@@ -252,55 +237,45 @@ func LoginUser(c *gin.Context) {
                 otherUser = user1
             }
 
-            // go activeUsers.UpdateStatusWhenUserBecomesActive(chatID,  dbUser.Username, otherUser)
             go chat.UpdateStatusWhenUserBecomesActive(chatID, dbUser.Username, otherUser)
         }
     }()
 
-    log.Println("Broadcasting active users")
     go activeUsers.FetchActiveUsersAndBroadcast(db.DB)
 }
 
 func LogoutUser(c *gin.Context) {
     claims, exists := c.Get("claims")
-    if (!exists) {
+    if !exists {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
         return
     }
     customClaims, ok := claims.(*utils.CustomClaims)
-    if (!ok) {
+    if !ok {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
         return
     }
     username := customClaims.Username
 
-    log.Printf("Logout request received for username: %s", username)
-
     // Update the user's active status to false and set last_active to current timestamp
     _, err := db.DB.Exec("UPDATE users SET active = ?, last_active = NOW() WHERE username = ?", false, username)
-    if (err != nil) {
-        log.Printf("Error updating user active status for username %s: %v", username, err)
+    if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
         return
-    } else {
-        log.Printf("Updated user active status to inactive for username %s", username)
     }
 
     c.SetCookie("refresh_token", "", -1, "/", "", false, true)
     c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 
-    log.Println("Broadcasting active users")
+    // Broadcast active users update asynchronously
     go activeUsers.FetchActiveUsersAndBroadcast(db.DB)
 }
 
 
 func DeleteUser(c *gin.Context) {
-    log.Println("DeleteUser request received")
-
     // Retrieve the claims from the context set by the middleware
     claims, exists := c.Get("claims")
     if !exists {
-        log.Println("No claims found in context")
         c.JSON(http.StatusUnauthorized, gin.H{"error": "No claims found"})
         return
     }
@@ -308,30 +283,25 @@ func DeleteUser(c *gin.Context) {
     // Assuming claims is of type *utils.CustomClaims
     customClaims, ok := claims.(*utils.CustomClaims)
     if !ok {
-        log.Println("Invalid token claims:", claims)
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
         return
     }
 
     // Get username from claims
     username := customClaims.Username
-    log.Println("Deleting user account for username:", username)
 
     // Delete the user from the database
     result, err := db.DB.Exec("DELETE FROM users WHERE username = ?", username)
     if err != nil {
-        log.Println("Error executing DELETE query:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting user account"})
         return
     }
 
     rowsAffected, _ := result.RowsAffected()
     if rowsAffected == 0 {
-        log.Println("No rows affected, user might not exist:", username)
         c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
         return
     }
 
-    log.Println("Account deleted successfully for username:", username)
     c.JSON(http.StatusOK, gin.H{"message": "Account deleted successfully"})
 }
