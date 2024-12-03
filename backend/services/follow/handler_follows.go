@@ -1,6 +1,7 @@
 package follow
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -13,83 +14,88 @@ import (
 )
 
 func FollowUser(c *gin.Context) {
+    // Validate and extract claims
     claims, exists := c.Get("claims")
-    if !exists {
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "No claims found"})
-        return
-    }
-    customClaims, ok := claims.(*utils.CustomClaims)
-    if !ok {
+    if !exists || claims.(*utils.CustomClaims) == nil {
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
         return
     }
-    
+    customClaims := claims.(*utils.CustomClaims)
+
     followerUsername := customClaims.Username
     followingUsername := c.Param("username")
-
-    // Get follower ID from follower username
-    var followerID int64
-    err := db.DB.QueryRow("SELECT id FROM users WHERE username = ?", followerUsername).Scan(&followerID)
-    if err != nil {
-        log.Printf("Error retrieving follower ID: %v\n", err)
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving follower ID"})
-        return
-    }
-
-    // Get following ID from following username
-    var followingID int64
-    err = db.DB.QueryRow("SELECT id FROM users WHERE username = ?", followingUsername).Scan(&followingID)
-    if err != nil {
-        log.Printf("Error retrieving following ID: %v\n", err)
-        c.JSON(http.StatusBadRequest, gin.H{"error": "User does not exist"})
-        return
-    }
-
-    if followerID == followingID {
+    
+    if followerUsername == followingUsername {
         c.JSON(http.StatusBadRequest, gin.H{"error": "You cannot follow yourself"})
         return
     }
 
-    // Check if the follow relationship already exists
+    // Use a single query to get follower and following IDs
+    var followerID, followingID int64
+    err := db.DB.QueryRow(`
+        SELECT f.id, u.id 
+        FROM users f 
+        JOIN users u ON u.username = ? 
+        WHERE f.username = ?`, followingUsername, followerUsername).
+        Scan(&followerID, &followingID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "User does not exist"})
+        } else {
+            log.Printf("Error retrieving user IDs: %v\n", err)
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving user IDs"})
+        }
+        return
+    }
+
+    // Check if the follow relationship already exists and create it if not
+    tx, err := db.DB.Begin()
+    if err != nil {
+        log.Printf("Error starting transaction: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error starting transaction"})
+        return
+    }
+
     var followExists bool
-    err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_id = ? AND following_id = ?)", followerID, followingID).Scan(&followExists)
+    err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_id = ? AND following_id = ?)", followerID, followingID).Scan(&followExists)
     if err != nil {
         log.Printf("Error checking follow status: %v\n", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking follow status"})
+        tx.Rollback()
         return
     }
-
     if followExists {
         c.JSON(http.StatusBadRequest, gin.H{"error": "You are already following this user"})
+        tx.Rollback()
         return
     }
 
-    // Create a follow relationship
-    _, err = db.DB.Exec("INSERT INTO followers (follower_id, following_id) VALUES (?, ?)", followerID, followingID)
+    // Create follow relationship and notification
+    _, err = tx.Exec("INSERT INTO followers (follower_id, following_id) VALUES (?, ?)", followerID, followingID)
     if err != nil {
         log.Printf("Error creating follow relationship: %v\n", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error following user"})
+        tx.Rollback()
         return
     }
 
-    // Get profile picture of the follower
-    var profilePicture string
-    err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE id = ?", followerID).Scan(&profilePicture)
-    if err != nil {
-        log.Printf("Error retrieving follower's profile picture: %v\n", err)
-        profilePicture = ""
-    }
-
-    // Create follow notification
     message := followerUsername + " started following you"
-    _, err = db.DB.Exec("INSERT INTO notifications (user_id, type, message, follower_id) VALUES (?, ?, ?, ?)", followingID, models.FollowNotificationType, message, followerID)
+    _, err = tx.Exec("INSERT INTO notifications (user_id, type, message, follower_id) VALUES (?, ?, ?, ?)", followingID, models.FollowNotificationType, message, followerID)
     if err != nil {
         log.Printf("Error creating follow notification: %v\n", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating notification"})
+        tx.Rollback()
         return
     }
 
-    // Broadcast notification count
+    err = tx.Commit()
+    if err != nil {
+        log.Printf("Error committing transaction: %v\n", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error committing transaction"})
+        return
+    }
+
+    // Get the unread notification count
     notificationCount, err := getUnreadNotificationCount(followingID)
     if err != nil {
         log.Printf("Error fetching unread notification count: %v\n", err)
@@ -99,8 +105,8 @@ func FollowUser(c *gin.Context) {
 
     notificationMessage := map[string]interface{}{
         "unread_notification_count": notificationCount,
-        "sender": followerUsername,
-        "receiver": followingUsername,
+        "sender":                    followerUsername,
+        "receiver":                  followingUsername,
     }
 
     notificationJSON, err := json.Marshal(notificationMessage)
@@ -115,6 +121,7 @@ func FollowUser(c *gin.Context) {
     c.JSON(http.StatusOK, gin.H{"message": "Successfully followed user"})
 }
 
+
 func getUnreadNotificationCount(userID int64) (int, error) {
     var count int
     err := db.DB.QueryRow("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = false", userID).Scan(&count)
@@ -122,92 +129,113 @@ func getUnreadNotificationCount(userID int64) (int, error) {
 }
 
 func UnfollowUser(c *gin.Context) {
-	claims, exists := c.Get("claims")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "No claims found"})
-		return
-	}
+    claims, exists := c.Get("claims")
+    if !exists || claims.(*utils.CustomClaims) == nil {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+        return
+    }
+    customClaims := claims.(*utils.CustomClaims)
 
-	customClaims, ok := claims.(*utils.CustomClaims)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
-		return
-	}
+    followerUsername := customClaims.Username
+    followingUsername := c.Param("username")
 
-	followerUsername := customClaims.Username
-	followingUsername := c.Param("username")
+    if followerUsername == followingUsername {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "You cannot unfollow yourself"})
+        return
+    }
 
-	// Get follower ID from follower username
-	var followerID int64
-	err := db.DB.QueryRow("SELECT id FROM users WHERE username = ?", followerUsername).Scan(&followerID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving follower ID"})
-		return
-	}
+    var followerID, followingID int64
+    err := db.DB.QueryRow(`
+        SELECT f.id, u.id 
+        FROM users f 
+        JOIN users u ON u.username = ? 
+        WHERE f.username = ?`, followingUsername, followerUsername).Scan(&followerID, &followingID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "User does not exist"})
+        } else {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving user IDs"})
+        }
+        return
+    }
 
-	// Get following ID from following username
-	var followingID int64
-	err = db.DB.QueryRow("SELECT id FROM users WHERE username = ?", followingUsername).Scan(&followingID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "User does not exist"})
-		return
-	}
+    tx, err := db.DB.Begin()
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error starting transaction"})
+        return
+    }
 
-	// Check if the follow relationship exists
-	var followExists bool
-	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_id = ? AND following_id = ?)", followerID, followingID).Scan(&followExists)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking follow status"})
-		return
-	}
+    var followExists bool
+    err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_id = ? AND following_id = ?)", followerID, followingID).Scan(&followExists)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking follow status"})
+        tx.Rollback()
+        return
+    }
 
-	if !followExists {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "You are not following this user"})
-		return
-	}
+    if !followExists {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "You are not following this user"})
+        tx.Rollback()
+        return
+    }
 
-	// Remove the Follow relationship
-	_, err = db.DB.Exec("DELETE FROM followers WHERE follower_id = ? AND following_id = ?", followerID, followingID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error unfollowing user"})
-		return
-	}
+    _, err = tx.Exec("DELETE FROM followers WHERE follower_id = ? AND following_id = ?", followerID, followingID)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error unfollowing user"})
+        tx.Rollback()
+        return
+    }
 
-	c.JSON(http.StatusOK, gin.H{"message": "Successfully unfollowed user"})
+    err = tx.Commit()
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error committing transaction"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"message": "Successfully unfollowed user"})
 }
 
 func CheckFollowStatus(c *gin.Context) {
     followerUsername := c.Param("follower")
     followingUsername := c.Param("following")
-    var followerID, followingID int64
 
-    if err := db.DB.QueryRow("SELECT id FROM users WHERE username = ?", followerUsername).Scan(&followerID); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Follower not found"})
-        return
-    }
-    if err := db.DB.QueryRow("SELECT id FROM users WHERE username = ?", followingUsername).Scan(&followingID); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Following user not found"})
+    var followerID, followingID int64
+    err := db.DB.QueryRow(`
+        SELECT f.id, u.id 
+        FROM users f 
+        JOIN users u ON u.username = ? 
+        WHERE f.username = ?`, followingUsername, followerUsername).Scan(&followerID, &followingID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            c.JSON(http.StatusBadRequest, gin.H{"error": "User does not exist"})
+        } else {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving user IDs"})
+        }
         return
     }
 
     var followExists bool
-    if err := db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_id = ? AND following_id = ?)", followerID, followingID).Scan(&followExists); err != nil {
+    err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_id = ? AND following_id = ?)", followerID, followingID).Scan(&followExists)
+    if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking follow status"})
         return
     }
 
     c.JSON(http.StatusOK, gin.H{"is_following": followExists})
 }
+
 func GetFollowers(c *gin.Context) {
     username := c.Param("username")
-    var userID int64
-    err := db.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID)
-    if err != nil {
-        log.Printf("Error retrieving user ID: %v\n", err)
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving user ID"})
-        return
-    }
-    rows, err := db.DB.Query("SELECT u.username, u.profile_picture FROM followers f JOIN users u ON f.follower_id = u.id WHERE f.following_id = ?", userID)
+    
+    var followers []gin.H
+    query := `
+        SELECT u.username, u.profile_picture 
+        FROM followers f 
+        JOIN users u ON f.follower_id = u.id 
+        JOIN users u2 ON f.following_id = u2.id 
+        WHERE u2.username = ?`
+    
+    rows, err := db.DB.Query(query, username)
     if err != nil {
         log.Printf("Error retrieving followers: %v\n", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving followers"})
@@ -215,7 +243,6 @@ func GetFollowers(c *gin.Context) {
     }
     defer rows.Close()
 
-    var followers []gin.H
     for rows.Next() {
         var username, profilePicture string
         if err := rows.Scan(&username, &profilePicture); err != nil {
@@ -237,14 +264,16 @@ func GetFollowers(c *gin.Context) {
 
 func GetFollowing(c *gin.Context) {
     username := c.Param("username")
-    var userID int64
-    err := db.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID)
-    if err != nil {
-        log.Printf("Error retrieving user ID: %v\n", err)
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving user ID"})
-        return
-    }
-    rows, err := db.DB.Query("SELECT u.username, u.profile_picture FROM followers f JOIN users u ON f.following_id = u.id WHERE f.follower_id = ?", userID)
+    
+    var followings []gin.H
+    query := `
+        SELECT u.username, u.profile_picture 
+        FROM followers f 
+        JOIN users u ON f.following_id = u.id 
+        JOIN users u2 ON f.follower_id = u2.id 
+        WHERE u2.username = ?`
+    
+    rows, err := db.DB.Query(query, username)
     if err != nil {
         log.Printf("Error retrieving followings: %v\n", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving followings"})
@@ -252,7 +281,6 @@ func GetFollowing(c *gin.Context) {
     }
     defer rows.Close()
 
-    var followings []gin.H
     for rows.Next() {
         var username, profilePicture string
         if err := rows.Scan(&username, &profilePicture); err != nil {
