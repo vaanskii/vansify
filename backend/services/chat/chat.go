@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -193,6 +194,15 @@ func ChatWsHandler(c *gin.Context) {
         }
         incomingMessage.ID = int(messageID)
 
+        // Send the real message ID back to the sender first
+        idMessage := map[string]interface{}{
+            "id":     incomingMessage.ID,
+            "status": incomingMessage.Status,
+            "type":   "MESSAGE_ID",
+        }
+        idMessageBytes, _ := json.Marshal(idMessage)
+        conn.WriteMessage(messageType, idMessageBytes) // Ensure message ID is sent before any other operation
+
         // Update message status to 'sent' after saving to DB
         incomingMessage.Status = "sent"
         _, err = db.DB.Exec("UPDATE messages SET status = ? WHERE id = ?", incomingMessage.Status, incomingMessage.ID)
@@ -203,20 +213,17 @@ func ChatWsHandler(c *gin.Context) {
         if cm.IsUserInChat(chatID, recipientUsername) {
             incomingMessage.Status = "read"
             _, err = db.DB.Exec("UPDATE messages SET status = ? WHERE id = ?", incomingMessage.Status, incomingMessage.ID)
-            if err != nil {
+            if err == nil {
+                // Mark notifications as read if the recipient is in the chat
+                originalPath := c.Request.URL.Path
+                c.Request.URL.Path = "/chats/" + chatID + "/notifications/read"
+                MarkChatNotificationsAsRead(c)
+                log.Printf("Notifications marked as read for user: %s in chat: %s", recipientUsername, chatID)
+                c.Request.URL.Path = originalPath // Restore original path
             }
         } else {
             go UpdateStatusWhenUserBecomesActive(incomingMessage.ChatID, recipientUsername, incomingMessage.Username)
         }
-
-        // Send the real message ID back to the sender first
-        idMessage := map[string]interface{}{
-            "id":     incomingMessage.ID,
-            "status": incomingMessage.Status,
-            "type":   "MESSAGE_ID",
-        }
-        idMessageBytes, _ := json.Marshal(idMessage)
-        conn.WriteMessage(messageType, idMessageBytes)
 
         // Prepare full message to send to clients
         fullMessage := struct {
@@ -382,7 +389,7 @@ func MarkChatNotificationsAsRead(c *gin.Context) {
     broadcastMessage, _ := json.Marshal(statusUpdateMessage)
     hub.BroadcastMessage(nil, websocket.TextMessage, broadcastMessage)
 
-    c.JSON(http.StatusOK, gin.H{"message": "Messages marked as read and notifications deleted"})
+    // c.JSON(http.StatusOK, gin.H{"message": "Messages marked as read and notifications deleted"})
 }
 
 func GetChatHistory(c *gin.Context) {
