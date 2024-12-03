@@ -2,7 +2,6 @@ package user
 
 import (
 	"database/sql"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -30,17 +29,16 @@ var (
 func HandleConnections(c *gin.Context) {
     ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
     if err != nil {
-        log.Fatal("Error upgrading to WebSocket:", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upgrade to WebSocket"})
+        return
     }
     username := c.Query("username")
-    log.Printf("Client connected: %s, Username: %s", ws.RemoteAddr(), username)
 
     clientMutex.Lock()
     clients[ws] = username
     clientMutex.Unlock()
 
     defer func() {
-        log.Printf("Client disconnected: %s, Username: %s", ws.RemoteAddr(), username)
         ws.Close()
 
         clientMutex.Lock()
@@ -58,54 +56,38 @@ func HandleConnections(c *gin.Context) {
             for _, connectedUsername := range clients {
                 if connectedUsername == username {
                     // User reconnected, reset becoming_inactive status
-                    _, err := db.DB.Exec("UPDATE users SET becoming_inactive = FALSE WHERE username = ?", username)
-                    if err != nil {
-                        log.Printf("Error updating becoming_inactive status for username %s: %v", username, err)
-                    }
+                    db.DB.Exec("UPDATE users SET becoming_inactive = FALSE WHERE username = ?", username)
                     return
                 }
-            }
+            }            
 
             _, err := db.DB.Exec("UPDATE users SET active = false, becoming_inactive = FALSE, last_active = NOW() WHERE username = ?", username)
-            if err != nil {
-                log.Printf("Error updating user active status for username %s: %v", username, err)
-            } else {
-                log.Printf("Updated user active status to inactive for username %s", username)
+            if err == nil {
+                FetchActiveUsersAndBroadcast(db.DB)
             }
-
-            go FetchActiveUsersAndBroadcast(db.DB)
         }(username)
     }()
 
     _, err = db.DB.Exec("UPDATE users SET active = true, last_active = NULL, becoming_inactive = FALSE WHERE username = ?", username)
-    if err != nil {
-        log.Printf("Error updating user active status for username %s: %v", username, err)
-    } else {
-        log.Printf("Updated user active status to active for username %s", username)
+    if err == nil {
+        FetchActiveUsersAndBroadcast(db.DB)
     }
-
-    go FetchActiveUsersAndBroadcast(db.DB)
 
     for {
         var msg []string
         err := ws.ReadJSON(&msg)
         if err != nil {
-            log.Printf("Read error: %v, closing connection for client: %s, Username: %s", err, ws.RemoteAddr(), username)
             clientMutex.Lock()
             delete(clients, ws)
             clientMutex.Unlock()
 
             _, err := db.DB.Exec("UPDATE users SET becoming_inactive = TRUE WHERE username = ?", username)
-            if err != nil {
-                log.Printf("Error updating becoming_inactive status for username %s: %v", username, err)
+            if err == nil {
+                break
             }
-
-            break
         }
-        log.Printf("Received message from client: %s, Username: %s, Message: %v", ws.RemoteAddr(), username, msg)
     }
 }
-
 
 func HandleMessages() {
     for {
@@ -114,7 +96,6 @@ func HandleMessages() {
         for client := range clients {
             err := client.WriteJSON(msg)
             if err != nil {
-                log.Printf("Error broadcasting to client: %v, Client: %s", err, client.RemoteAddr())
                 client.Close()
                 delete(clients, client)
             }
@@ -124,8 +105,6 @@ func HandleMessages() {
 }
 
 func FetchActiveUsersAndBroadcast(db *sql.DB) {
-    log.Println("Fetching active users")
-
     var activeUsers []struct {
         Username       string `json:"username"`
         ProfilePicture string `json:"profile_picture"`
@@ -133,7 +112,6 @@ func FetchActiveUsersAndBroadcast(db *sql.DB) {
 
     rows, err := db.Query("SELECT username, profile_picture FROM users WHERE active = true")
     if err != nil {
-        log.Printf("Error fetching active users: %v", err)
         return
     }
     defer rows.Close()
@@ -144,17 +122,14 @@ func FetchActiveUsersAndBroadcast(db *sql.DB) {
             ProfilePicture string `json:"profile_picture"`
         }
         if err := rows.Scan(&user.Username, &user.ProfilePicture); err != nil {
-            log.Printf("Error scanning user: %v", err)
             return
         }
         activeUsers = append(activeUsers, user)
     }
     if err := rows.Err(); err != nil {
-        log.Printf("Error iterating over rows: %v", err)
         return
     }
 
-    log.Printf("Broadcasting %d active users", len(activeUsers))
     clientMutex.Lock()
     for client, username := range clients {
         // Exclude the broadcasting user
@@ -167,15 +142,11 @@ func FetchActiveUsersAndBroadcast(db *sql.DB) {
                 usersToSend = append(usersToSend, user)
             }
         }
-        log.Printf("Broadcasting to client: %s, Username: %s", client.RemoteAddr(), username)
         err := client.WriteJSON(usersToSend)
         if err != nil {
-            log.Printf("Error broadcasting to client: %v, Client: %s", err, client.RemoteAddr())
             client.Close()
             delete(clients, client)
         }
     }
     clientMutex.Unlock()
-    log.Println("Broadcast complete")
 }
-
