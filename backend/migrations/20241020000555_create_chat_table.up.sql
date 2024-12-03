@@ -4,6 +4,7 @@ CREATE TABLE chats (
     user1 VARCHAR(255) NOT NULL,
     user2 VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_for TEXT,
     FOREIGN KEY (user1) REFERENCES users(username) ON DELETE CASCADE, 
     FOREIGN KEY (user2) REFERENCES users(username) ON DELETE CASCADE
 );

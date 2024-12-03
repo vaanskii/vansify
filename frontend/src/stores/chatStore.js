@@ -14,30 +14,33 @@ export const useChatStore = defineStore('chatStore', () => {
 
   const fetchChats = async () => {
     try {
-      const response = await axios.get('/v1/me/chats', {
-        headers: {
-          Authorization: `Bearer ${store.user.access}`
+        const response = await axios.get('/v1/me/chats', {
+            headers: {
+                Authorization: `Bearer ${store.user.access}`
+            }
+        });
+        if (response.data && response.data.chats) {
+            const newChats = response.data.chats
+                .filter(chat => !chat.deleted_for || !chat.deleted_for.includes(store.user.username)) // Filter out deleted chats
+                .map(chat => ({
+                    chat_id: chat.chat_id,
+                    user: chat.user,
+                    unread_count: chat.unread_count,
+                    last_message_time: chat.last_message_time || "",
+                    profile_picture: chat.profile_picture,
+                    last_message: chat.last_message || "No messages yet"
+                }));
+            chats.value = newChats;
+            loader.value = false;
+        } else {
+            chats.value = [];
         }
-      });
-      if (response.data && response.data.chats) {
-        const newChats = response.data.chats.map(chat => ({
-          chat_id: chat.chat_id,
-          user: chat.user,
-          unread_count: chat.unread_count,
-          last_message_time: chat.last_message_time || "",
-          profile_picture: chat.profile_picture,
-          last_message: chat.last_message || "No messages yet"
-        }));
-        chats.value = newChats;
-        loader.value = false;
-      } else {
-        chats.value = [];
-      }
     } catch (err) {
-      error.value = err.response ? err.response.data.error : 'An error occurred';
-      console.error("Error fetching chats:", err);
+        error.value = err.response ? err.response.data.error : 'An error occurred';
+        console.error("Error fetching chats:", err);
     }
-  };  
+};
+
 
   const deleteChat = async (chatID) => {
     try {

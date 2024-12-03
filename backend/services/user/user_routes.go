@@ -2,8 +2,8 @@ package user
 
 import (
 	"database/sql"
-	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vaanskii/vansify/db"
@@ -107,7 +107,6 @@ func GetUserByUsername(c *gin.Context) {
 func GetUserChats(c *gin.Context) {
     claims, exists := c.Get("claims")
     if !exists {
-        log.Println("Unauthorized: No claims found")
         c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
         return
     }
@@ -121,7 +120,6 @@ func GetUserChats(c *gin.Context) {
     var userID int64
     err := db.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID)
     if err != nil {
-        log.Printf("Error retrieving user ID: %v\n", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving user ID"})
         return
     }
@@ -131,15 +129,15 @@ func GetUserChats(c *gin.Context) {
             c.chat_id, 
             c.user1, 
             c.user2, 
+            COALESCE(c.deleted_for, '') AS deleted_for, 
             COALESCE(MAX(m.created_at), '') AS last_message_time,
             COALESCE((SELECT message FROM messages WHERE chat_id = c.chat_id AND (deleted_for IS NULL OR deleted_for NOT LIKE ?) ORDER BY created_at DESC LIMIT 1), '') AS last_message
         FROM chats c
         LEFT JOIN messages m ON c.chat_id = m.chat_id
         WHERE (c.user1 = ? OR c.user2 = ?) 
-        GROUP BY c.chat_id, c.user1, c.user2
+        GROUP BY c.chat_id, c.user1, c.user2, c.deleted_for
         HAVING last_message IS NOT NULL`, "%"+username+"%", username, username)
     if err != nil {
-        log.Printf("Error fetching user chats: %v\n", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching user chats"})
         return
     }
@@ -147,13 +145,16 @@ func GetUserChats(c *gin.Context) {
 
     var chats []map[string]interface{}
     for rows.Next() {
-        var chatID, user1, user2 string
+        var chatID, user1, user2, deletedFor string
         var lastMessageTime, lastMessage sql.NullString
 
-        if err := rows.Scan(&chatID, &user1, &user2, &lastMessageTime, &lastMessage); err != nil {
-            log.Printf("Error scanning chat: %v\n", err)
+        if err := rows.Scan(&chatID, &user1, &user2, &deletedFor, &lastMessageTime, &lastMessage); err != nil {
             c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning chat"})
             return
+        }
+
+        if deletedFor != "" && contains(deletedFor, username) {
+            continue
         }
 
         otherUser := user1
@@ -165,17 +166,13 @@ func GetUserChats(c *gin.Context) {
         var profilePicture string
         err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", otherUser).Scan(&profilePicture)
         if err != nil {
-            log.Printf("Error querying profile picture for user %s: %v\n", otherUser, err)
             profilePicture = ""
         }
-
-        log.Printf("Other User: %s, Profile Picture: %s", otherUser, profilePicture)
 
         // Get unread message count for each chat
         var unreadCount int
         err = db.DB.QueryRow("SELECT COUNT(*) FROM chat_notifications WHERE user_id = ? AND chat_id = ? AND is_read = false", userID, chatID).Scan(&unreadCount)
         if err != nil {
-            log.Printf("Error fetching unread count: %v\n", err)
             c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching unread count"})
             return
         }
@@ -191,6 +188,16 @@ func GetUserChats(c *gin.Context) {
     }
 
     c.JSON(http.StatusOK, gin.H{"chats": chats})
+}
+
+// Helper function to check if the username is in the deleted_for list
+func contains(deletedFor, username string) bool {
+    for _, u := range strings.Split(deletedFor, ",") {
+        if u == username {
+            return true
+        }
+    }
+    return false
 }
 
 func GetActiveUsersHandler(c *gin.Context) {
