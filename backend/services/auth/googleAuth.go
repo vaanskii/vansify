@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,9 +28,9 @@ import (
 )
 
 const (
-	key    = "RandomString"
-	MaxAge = 86400 * 30
-	IsProd = false
+    key    = "RandomString"
+    MaxAge = 86400 * 30
+    IsProd = false
 )
 
 type UserRequest struct {
@@ -46,8 +45,10 @@ func init() {
 }
 
 func InitGoogleAuth() {
-    godotenv.Load()
-    
+    if err := godotenv.Load(); err != nil {
+        log.Fatalf("Error loading .env file: %v", err)
+    }
+
     googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
     googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
     backendUrl := os.Getenv("BACKEND_URL")
@@ -57,9 +58,9 @@ func InitGoogleAuth() {
     }
 
     googleScopes := []string{
-        "openid",                        
-        "profile",                       
-        "email",                         
+        "openid",
+        "profile",
+        "email",
         "https://www.googleapis.com/auth/drive.file",
         "https://www.googleapis.com/auth/drive.readonly",
         "https://www.googleapis.com/auth/drive",
@@ -74,15 +75,10 @@ func InitGoogleAuth() {
     }
     gothic.Store = store
 
-    log.Println("Initializing Google provider with Client ID:", googleClientID)
-    log.Println("Using Scopes:", googleScopes)
-
     // Initialize Google provider with updated scopes and access type
     googleProvider := google.New(googleClientID, googleClientSecret, backendUrl+"/v1/auth/google/callback", googleScopes...)
     googleProvider.SetAccessType("offline")
     goth.UseProviders(googleProvider)
-
-    log.Println("Google provider initialized with scopes and offline access.")
 }
 
 func AuthHandler(c *gin.Context) {
@@ -91,32 +87,26 @@ func AuthHandler(c *gin.Context) {
         "google": true,
     }
 
-    log.Println("AuthHandler triggered with provider:", provider)
     if !allowedProviders[provider] {
         c.String(http.StatusBadRequest, "You must select a valid provider")
-        log.Println("Error: Invalid provider specified.")
         return
     }
 
     c.Request.URL.RawQuery = "provider=" + provider
     session, err := gothic.Store.Get(c.Request, "gothic-session")
     if err != nil {
-        log.Println("Error creating session in AuthHandler:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
         return
     }
 
     session.Values["provider"] = provider
     if err := session.Save(c.Request, c.Writer); err != nil {
-        log.Println("Error saving session in AuthHandler:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save session"})
         return
     }
-    log.Println("Session created in AuthHandler, session ID:", session.ID)
 
     url, err := gothic.GetAuthURL(c.Writer, c.Request)
     if err != nil {
-        log.Println("Error getting auth URL:", err)
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get auth URL"})
         return
     }
@@ -132,15 +122,16 @@ func AuthCallback(c *gin.Context) {
     ctx := context.WithValue(c.Request.Context(), providerKey, provider)
     c.Request = c.Request.WithContext(ctx)
 
-    session, err := gothic.Store.Get(c.Request, "gothic-session")
+    _, err := gothic.Store.Get(c.Request, "gothic-session")
     if err != nil {
         log.Println("Error retrieving session in AuthCallback:", err)
-    } else {
-        log.Println("Session retrieved in AuthCallback, session ID:", session.ID)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve session"})
+        return
     }
 
     user, err := gothic.CompleteUserAuth(c.Writer, c.Request)
     if err != nil {
+        log.Println("Error completing user auth:", err)
         c.String(http.StatusBadRequest, fmt.Sprint(err))
         return
     }
@@ -162,26 +153,20 @@ func AuthCallback(c *gin.Context) {
         accessToken, err := utils.GenerateAccessToken(existingUser.Username, existingUser.Email)
         if err != nil {
             log.Println("Error generating access token:", err)
-            c.String(http.StatusInternalServerError, fmt.Sprintf("Error generating access token: %v", err))
+            c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error generating access token: %v", err)})
             return
         }
 
         refreshToken, err := utils.GenerateRefreshToken(existingUser.Username, existingUser.Email)
         if err != nil {
             log.Println("Error generating refresh token:", err)
-            c.String(http.StatusInternalServerError, fmt.Sprintf("Error generating refresh token: %v", err))
+            c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error generating refresh token: %v", err)})
             return
         }
 
         frontendUrl := os.Getenv("FRONTEND_URL")
-
-        redirectURL := frontendUrl + "/auth/google/callback?email=" + url.QueryEscape(existingUser.Email) +
-            "&username=" + url.QueryEscape(existingUser.Username) +
-            "&access_token=" + url.QueryEscape(accessToken) +
-            "&refresh_token=" + url.QueryEscape(refreshToken) +
-            "&id=" + strconv.FormatInt(existingUser.ID, 10) +
-            "&oauth_user=" + strconv.FormatBool(existingUser.OauthUser) +
-            "&active=" + strconv.FormatBool(existingUser.Active)
+        redirectURL := fmt.Sprintf("%s/auth/google/callback?email=%s&username=%s&access_token=%s&refresh_token=%s&id=%d&oauth_user=%t&active=%t",
+            frontendUrl, url.QueryEscape(existingUser.Email), url.QueryEscape(existingUser.Username), url.QueryEscape(accessToken), url.QueryEscape(refreshToken), existingUser.ID, existingUser.OauthUser, existingUser.Active)
 
         // Send the response first
         c.Redirect(http.StatusTemporaryRedirect, redirectURL)
@@ -206,15 +191,12 @@ func AuthCallback(c *gin.Context) {
             defer rows.Close()
 
             for rows.Next() {
-                var chatID string
-                var user1 string
-                var user2 string
+                var chatID, user1, user2 string
                 if err := rows.Scan(&chatID, &user1, &user2); err != nil {
                     log.Println("Error scanning chat ID:", err)
                     continue
                 }
 
-                // Determine the other user in the chat
                 var otherUser string
                 if existingUser.Username == user1 {
                     otherUser = user2
@@ -222,18 +204,16 @@ func AuthCallback(c *gin.Context) {
                     otherUser = user1
                 }
 
-                // Update message statuses for all active chats
-                go chat.UpdateStatusWhenUserBecomesActive(chatID,  existingUser.Username, otherUser)
+                go chat.UpdateStatusWhenUserBecomesActive(chatID, existingUser.Username, otherUser)
             }
         }()
         return
     }
 
     frontendUrl := os.Getenv("FRONTEND_URL")
-    redirectURL := frontendUrl + "/choose-username?email=" + url.QueryEscape(user.Email)
+    redirectURL := fmt.Sprintf("%s/choose-username?email=%s", frontendUrl, url.QueryEscape(user.Email))
     c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
-
 
 
 func CreateUserWithUsername(c *gin.Context) {
