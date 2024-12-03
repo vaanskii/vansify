@@ -24,7 +24,11 @@ const handleSubmit = async () => {
         const response = await axios.post('/v1/forgot-password', { email: email.value });
         message.value = response.data.message;
     } catch (error) {
-        message.value = 'An error occurred. Please try again.';
+        if (error.response && error.response.data && error.response.data.error === "OAuth users cannot reset password") {
+            message.value = 'OAuth users cannot reset their password through this form. Please use your OAuth provider to manage your password.';
+        } else {
+            message.value = 'An error occurred. Please try again.';
+        }
     }
 };
 </script>
