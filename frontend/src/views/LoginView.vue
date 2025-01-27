@@ -80,3 +80,10 @@ const loginWithGoogle = () => {
   window.location.href = `${apiUrl}/v1/auth/google`;
 };
 </script>
+
+<style scoped>
+input[type="text"],
+input[type="password"] {
+  font-size: 16px;
+}
+</style>

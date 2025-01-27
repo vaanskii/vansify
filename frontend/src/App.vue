@@ -10,11 +10,13 @@ import Navigation from './components/Navigation.vue';
 import { onMounted, onUnmounted, watch } from 'vue';
 import { userStore } from '@/stores/user';
 import { useNotificationStore } from '@/stores/appNotifications';
+import { useChatNotificationStore } from './stores/chatNotification';
 import { useActiveUsersStore } from '@/stores/activeUsers';
 
 const store = userStore();
 const notificationStore = useNotificationStore();
 const activeUsersStore = useActiveUsersStore();
+const chatNotificationStore = useChatNotificationStore();
 
 const closeWebSockets = () => {
   if (notificationStore.ws.value) {
@@ -23,6 +25,9 @@ const closeWebSockets = () => {
   if (activeUsersStore.ws.value) {
     activeUsersStore.ws.value.close();
   }
+  if (chatNotificationStore.ws.value) {
+    chatNotificationStore.ws.value.close();
+  }
 };
 
 onMounted(() => {
@@ -30,6 +35,7 @@ onMounted(() => {
   if (store.user.isAuthenticated) {
     notificationStore.connectWebSocket();
     activeUsersStore.connectWebSocket();
+    chatNotificationStore.connectWebSocket();
   }
 });
 
@@ -46,6 +52,7 @@ watch(
     if (newVal) {
       notificationStore.connectWebSocket();
       activeUsersStore.connectWebSocket();
+      chatNotificationStore.connectWebSocket();
     } else {
       closeWebSockets();
     }

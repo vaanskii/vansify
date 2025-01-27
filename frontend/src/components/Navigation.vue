@@ -29,6 +29,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { userStore } from '@/stores/user';
+import { useChatStore } from '@/stores/chatStore';
 import axios from 'axios';
 import emitter from '@/eventBus';
 
@@ -39,6 +40,7 @@ const unreadCount = ref(0);
 const unreadNotificationCount = ref(0);
 const wsConnected = ref(false);
 const loader = ref(true);
+const chatStore = useChatStore();
 
 const isMobile = ref(window.innerWidth <= 768);
 const isChatRoute = computed(() => {
@@ -120,7 +122,7 @@ const logout = async () => {
     console.error('Error logging out:', error);
   }
   store.removeToken();
-  router.push('/login');
+  router.push('/');
 };
 
 

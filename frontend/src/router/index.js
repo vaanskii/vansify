@@ -12,6 +12,53 @@ import NotificationsView from '@/views/NotificationsView.vue';
 import { userStore } from '@/stores/user';
 import GoogleCallback from '@/components/GoogleCallback.vue';
 import ChooseUsername from '@/components/ChooseUsername.vue';
+import testchat from '@/views/testchat.vue';
+import InboxWrapper from '@/views/InboxWrapper.vue';
+
+// Function to determine if the device is mobile
+const isMobile = () => window.innerWidth <= 768; // Change breakpoint as needed
+
+const mobileRoutes = [
+  {
+    path: '/inbox/:chatID',
+    name: 'chat',
+    component: Chat,
+    meta: {
+      title: 'Chat',
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/inbox',
+    name: 'chatlist',
+    component: ChatListView,
+    meta: {
+      title: 'Chat',
+      requiresAuth: true
+    }
+  }
+];
+
+const desktopRoutes = [
+  {
+    path: '/inbox',
+    component: InboxWrapper,
+    meta: {
+      title: "Inbox"
+    },
+    children: [
+      {
+        path: ':chatID',
+        name: 'chat',
+        component: Chat,
+        meta: {
+          title: 'Chat',
+          requiresAuth: true
+        }
+      }
+    ]
+  }
+];
 
 const routes = [
   {
@@ -42,24 +89,6 @@ const routes = [
     path: '/:username',
     name: 'userprofile',
     component: ProfileView,
-  },
-  {
-    path: '/inbox/:chatID',
-    name: 'chat',
-    component: Chat,
-    meta: {
-      title: 'Chat',
-      requiresAuth: true
-    }
-  },
-  {
-    path: '/inbox',
-    name: 'chatlist',
-    component: ChatListView,
-    meta: {
-      title: 'Chat',
-      requiresAuth: true
-    }
   },
   {
     path: '/forgot-password',
@@ -109,6 +138,16 @@ const routes = [
       title: 'Choose Username',
     }
   },
+  {
+    path: '/test-chat',
+    name: 'test',
+    component: testchat,
+    meta: {
+      title: 'test',
+    }
+  },
+  // Add routes based on device type
+  ...(isMobile() ? mobileRoutes : desktopRoutes)
 ];
 
 const router = createRouter({
@@ -116,13 +155,12 @@ const router = createRouter({
   routes
 });
 
-router.beforeEach(async (to, from, next) => {
+// Navigation guard to update document title and check authentication
+router.beforeEach((to, from, next) => {
   const store = userStore();
-  const isAuthenticated = await store.user.isAuthenticated;
+  const isAuthenticated = store.user.isAuthenticated;
 
   if (to.matched.some(record => record.meta.requiresAuth) && !isAuthenticated) {
-    next({ name: 'login' });
-  } else if (to.name === 'home' && !isAuthenticated) {
     next({ name: 'login' });
   } else {
     if ((to.name === 'login' || to.name === 'register') && isAuthenticated) {
@@ -130,6 +168,8 @@ router.beforeEach(async (to, from, next) => {
     } else {
       if (to.name === 'userprofile') {
         document.title = `${to.params.username} • Vansify`;
+      } else if (to.name === 'chat' && to.query.user) {
+        document.title = `Inbox • ${to.query.user}`;
       } else {
         document.title = to.meta.title || 'Default Title';
       }

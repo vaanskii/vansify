@@ -14,7 +14,7 @@
              'received-image': !message.isOwnMessage && message.file_url
            }">
         <div class="message-header" v-if="message.username && !message.isOwnMessage" @click="goToProfile(message.username)">
-          <img :src="message.profile_picture" alt="Profile Picture" class="profile-picture" />
+          <img :src="formatProfilePictureUrl(message.profile_picture)" alt="Profile Picture" class="profile-picture" />
           <strong>{{ message.username }}</strong>
         </div>
         <div class="message-body">
@@ -30,7 +30,7 @@
             <span v-if="message.status">({{ message.status }})</span> 
           </span>
           <span>{{ formatTime(message.created_at) }}</span>
-          <button v-if="message.isOwnMessage" @click="deleteMessage(message.id)" class="delete-button">Delete</button>
+          <button v-if="message.isOwnMessage" @click="deleteMessage(message.id)" class="delete-button">Unsent</button>
         </div>
       </div>
     </div>
@@ -80,11 +80,16 @@ const selectedFile = ref(null);
 const loadingOlderMessages = ref(false);
 const hasMoreMessages = ref(true);
 const wsConst = import.meta.env.VITE_WS;
+const token = store.user.access;
 let notificationsRead = false;
 
 const goToProfile = (username) => {
   router.push({ name: 'userprofile', params: { username }})
 };
+
+const formatProfilePictureUrl = (url) => {
+  return url.startsWith('/') ? url.substring(1) : url;
+}
 
 const scrollToBottom = () => {
   const container = messagesContainer.value;
@@ -153,6 +158,18 @@ const deleteMessage = async (messageID) => {
 let intentionalClosure = false;
 
 const connectWebSocket = (chatID, token) => {
+  if (ws) {
+    ws.onclose = () => {
+      console.log("Previous WebSocket closed, establishing new connection");
+      setupNewWebSocket(chatID, token);
+    };
+    ws.close();
+  } else {
+    setupNewWebSocket(chatID, token);
+  }
+};
+
+const setupNewWebSocket = (chatID, token) => {
   const wsURL = `${wsConst}//${apiUrl}/v1/chat/${chatID}/ws?token=${encodeURIComponent(token)}`;
   ws = new WebSocket(wsURL);
 
@@ -160,10 +177,10 @@ const connectWebSocket = (chatID, token) => {
     isConnected.value = true;
     retryAttempt = 0;
     isLoading.value = false;
-    console.log("websocket established in chat")
+    console.log("websocket established in chat", chatID);
     const unsentMessages = messages.value.filter(msg => msg.status === false && msg.isOwnMessage);
     unsentMessages.forEach(message => {
-      ws.send(JSON.stringify({ message: message.message, username }));
+      ws.send(JSON.stringify({ message: message.message, username, chatID })); 
       message.status = true;
     });
     removeOfflineMessages();
@@ -175,46 +192,23 @@ const connectWebSocket = (chatID, token) => {
   };
 
   ws.onclose = () => {
-  isConnected.value = false;
-  if (!intentionalClosure && retryAttempt < maxRetries) {
-    setTimeout(() => {
-      retryAttempt++;
-      connectWebSocket(chatID, token);
-    }, Math.min(1000 * Math.pow(2, retryAttempt), 30000));
-  } else if (!intentionalClosure) {
-    console.error('Max reconnection attempts reached.');
-  } else {
-    console.log("WebSocket intentionally closed, not attempting to reconnect.");
-    intentionalClosure = false;
-  }
-};
-
-// Watch for changes in route.params.chatID to handle WebSocket closure when chatID becomes invalid
-watch(
-  () => route.params.chatID,
-  (newChatID, oldChatID) => {
-    if (!newChatID) {
-      intentionalClosure = true;
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.close();
-        console.log("WebSocket closed because chatID is invalid");
-      }
-    } else if (newChatID !== oldChatID) {
-      intentionalClosure = true; 
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.close();
-        console.log("WebSocket closed to reconnect to a new chatID");
-      }
+    isConnected.value = false;
+    if (!intentionalClosure && retryAttempt < maxRetries) {
+      setTimeout(() => {
+        retryAttempt++;
+        connectWebSocket(chatID, token);
+      }, Math.min(1000 * Math.pow(2, retryAttempt), 30000));
+    } else if (!intentionalClosure) {
+      console.error('Max reconnection attempts reached.');
+    } else {
+      console.log("WebSocket intentionally closed, not attempting to reconnect.");
       intentionalClosure = false;
-      connectWebSocket(newChatID, token);
     }
-  }
-);
-
+  };
 
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
-    console.log("message", message)
+    console.log("message", message);
     message.message_id = message.message_id || message.id;
 
     switch (message.type) {
@@ -285,13 +279,23 @@ watch(
         }
         break;
     }
-      if (route.params.chatID === message.chat_id && message.username !== store.user.username && !notificationsRead) {
-        markChatNotificationsAsRead(message.chat_id);
-        notificationsRead = true; 
-      }
+    if (route.params.chatID === message.chat_id && message.username !== store.user.username && !notificationsRead) {
+      markChatNotificationsAsRead(message.chat_id);
+      notificationsRead = true; 
+    }
   };
-
 };
+
+watch(
+  () => route.params.chatID,
+  async (newChatID, oldChatID) => {
+    if (newChatID !== oldChatID) {
+      intentionalClosure = true;
+      connectWebSocket(newChatID, token);
+      intentionalClosure = false;
+    }
+  }
+);
 
 
 const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
@@ -342,6 +346,18 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
   }
 };
 
+const loadChat = async () => {
+  const chatID = route.params.chatID;
+  await fetchChatHistory(chatID);
+  chatUser.value = route.query.user;
+  connectWebSocket(chatID, token)
+}
+
+watch(() => route.params.chatID, () => {
+  messages.value = [];
+  chatUser.value = '';
+  loadChat();
+})
 
 const markChatNotificationsAsRead = async (chatID) => {
   try {
@@ -549,8 +565,6 @@ const sendMessage = async () => {
   nextTick(scrollToBottom);
 };
 
-
-
 watch(isConnected, (newVal) => {
   if (newVal) {
     const unsentMessages = messages.value.filter(msg => msg.status === 'sent' && msg.isOwnMessage);
@@ -562,9 +576,8 @@ watch(isConnected, (newVal) => {
   }
 });
 
-
-
 watch(messages, () => {
   nextTick(scrollToBottom)
 });
 </script>
+

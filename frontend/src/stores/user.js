@@ -18,8 +18,8 @@ export const userStore = defineStore({
   }),
   actions: {
     initStore() {
-      const encryptedAccess = sessionStorage.getItem("sess_a");
-      const encryptedRefresh = sessionStorage.getItem("sess_r");
+      const encryptedAccess = localStorage.getItem("sess_a");
+      const encryptedRefresh = localStorage.getItem("sess_r");
       const userData = localStorage.getItem("user_data");
       const secretKey = "your-secret-key";
 
@@ -74,9 +74,9 @@ export const userStore = defineStore({
       this.user.oauth_user = data.oauth_user;
       this.user.isAuthenticated = true;
 
-      // Save encrypted tokens in sessionStorage
-      sessionStorage.setItem("sess_a", encryptedAccess);
-      sessionStorage.setItem("sess_r", encryptedRefresh);
+      // Save encrypted tokens in localStorage
+      localStorage.setItem("sess_a", encryptedAccess);
+      localStorage.setItem("sess_r", encryptedRefresh);
 
       // Generate fake tokens for obfuscation
       const fakeAccess = this.generateFakeToken(10);
@@ -100,7 +100,6 @@ export const userStore = defineStore({
       this.user.oauth_user = null;
 
       localStorage.clear();
-      sessionStorage.clear();
       this.stopRefreshTokenTimer();
     },
     async refreshToken() {
@@ -113,7 +112,7 @@ export const userStore = defineStore({
 
         // Update tokens
         this.user.access = response.data.access_token;
-        sessionStorage.setItem("sess_a", encryptedAccess);
+        localStorage.setItem("sess_a", encryptedAccess);
         axios.defaults.headers.common["Authorization"] = "Bearer " + this.user.access;
         this.startRefreshTokenTimer();
       } catch (error) {
@@ -126,8 +125,12 @@ export const userStore = defineStore({
       const jwtToken = JSON.parse(atob(this.user.access.split(".")[1]));
       const expires = new Date(jwtToken.exp * 1000);
       const timeout = expires.getTime() - Date.now() - 60 * 1000;
-      this.refreshTokenTimeout = setTimeout(() => this.refreshToken(), timeout);
-    },
+      console.log(`Setting refresh token timer for ${timeout / 1000} seconds`);
+      this.refreshTokenTimeout = setTimeout(() => {
+        console.log('Refresh token timer triggered');
+        this.refreshToken();
+      }, timeout);
+    },    
     stopRefreshTokenTimer() {
       clearTimeout(this.refreshTokenTimeout);
     },

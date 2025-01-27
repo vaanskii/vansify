@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed} from 'vue';
 import axios from 'axios';
 import emitter from '@/eventBus';
 import { userStore } from './user';
@@ -20,6 +20,8 @@ export const useChatStore = defineStore('chatStore', () => {
             }
         });
         if (response.data && response.data.chats) {
+            console.log("chats", response.data.chats)
+            console.log("last_message formated time", new Date(response.data.chats).toLocaleString())
             const newChats = response.data.chats
                 .filter(chat => !chat.deleted_for || !chat.deleted_for.includes(store.user.username)) // Filter out deleted chats
                 .map(chat => ({
@@ -120,15 +122,23 @@ export const useChatStore = defineStore('chatStore', () => {
   
       if (chatIndex !== -1) {
         console.log("Updating existing chat:", chats.value[chatIndex]);
-        chats.value[chatIndex] = {
-          ...chats.value[chatIndex],
-          unread_count: data.unread_count,
-          last_message_time: data.last_message_time ,
-          message: data.message,
-          user: data.user,
-          profile_picture: data.profile_picture,
-          last_message: data.last_message
-        };
+  
+        if (data.username === store.user.username) {
+          // If the message is from the sender, only update the last_message and last_message_time
+          chats.value[chatIndex] = {
+            ...chats.value[chatIndex],
+            last_message_time: data.last_message_time,
+            last_message: data.last_message,
+          };
+        } else {
+          // If the message is from the recipient, update relevant details
+          chats.value[chatIndex] = {
+            ...chats.value[chatIndex],
+            unread_count: data.unread_count,
+            last_message_time: data.last_message_time,
+            last_message: data.last_message
+          };
+        }
         console.log("Updated chat:", chats.value[chatIndex]);
       } else {
         console.log("Adding new chat:", data);
@@ -149,7 +159,7 @@ export const useChatStore = defineStore('chatStore', () => {
     } catch (e) {
       console.error("Error processing WebSocket message:", e);
     }
-  };  
+  };
 
   const fetchActiveUsers = async () => {
     try {
