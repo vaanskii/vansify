@@ -16,8 +16,10 @@ var chatNotificationUpgrader = websocket.Upgrader{
     CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
-var connectedUsers = make(map[string]*websocket.Conn)
-var mu sync.Mutex
+var (
+    connectedUsers = make(map[string]*websocket.Conn)
+    mu             sync.RWMutex
+)
 
 func ChatNotificationWsHandler(c *gin.Context) {
     claims, exists := c.Get("claims")
@@ -37,11 +39,6 @@ func ChatNotificationWsHandler(c *gin.Context) {
         log.Println("WebSocket Upgrade error:", err)
         return
     }
-    log.Printf("User %s connected for notifications", username)
-
-    mu.Lock()
-    connectedUsers[username] = conn
-    mu.Unlock()
     defer func() {
         mu.Lock()
         delete(connectedUsers, username)
@@ -49,6 +46,11 @@ func ChatNotificationWsHandler(c *gin.Context) {
         log.Printf("User %s disconnected from notifications", username)
         conn.Close()
     }()
+    log.Printf("User %s connected for notifications", username)
+
+    mu.Lock()
+    connectedUsers[username] = conn
+    mu.Unlock()
 
     ChatNotification.AddConnection(conn, username)
     defer ChatNotification.RemoveConnection(conn)
