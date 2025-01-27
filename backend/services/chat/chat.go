@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -229,10 +228,11 @@ func ChatWsHandler(c *gin.Context) {
                 log.Printf("Notifications marked as read for user: %s in chat: %s", recipientUsername, chatID)
             } else {
                 log.Printf("Error marking message as read: %v", err)
+                go UpdateStatusWhenUserBecomesActive(incomingMessage.ChatID, recipientUsername, incomingMessage.Username)
+                log.Print("Status updated to delivered")
             }
         } else {
             go UpdateStatusWhenUserBecomesActive(incomingMessage.ChatID, recipientUsername, incomingMessage.Username)
-            log.Print("Status updated to delivered")
 
             // Send the delivered status update for messages
             statusUpdateMessage := map[string]interface{}{
@@ -301,7 +301,6 @@ func ChatWsHandler(c *gin.Context) {
                             "last_message":       lastMessage,
                         }
                         chatNotificationJSON, _ := json.Marshal(chatNotificationMessage)
-                        fmt.Print(chatNotificationJSON)
                         chat_notifications.ChatNotification.SendChatNotification(recipientUsername, chatNotificationJSON)
                     }
                 }
