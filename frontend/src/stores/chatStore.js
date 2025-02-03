@@ -3,6 +3,7 @@ import { ref, computed} from 'vue';
 import axios from 'axios';
 import emitter from '@/eventBus';
 import { userStore } from './user';
+import { parseISO, formatDistanceToNow } from 'date-fns';
 
 export const useChatStore = defineStore('chatStore', () => {
   const chats = ref([]);
@@ -80,6 +81,12 @@ export const useChatStore = defineStore('chatStore', () => {
     return chats.value.slice().sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
   });
 
+
+  function formatTimeAgo(utcTime) {
+    const localTime = parseISO(utcTime)
+    return formatDistanceToNow(localTime, {addSuffix: true});
+  }
+
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
   
@@ -93,12 +100,12 @@ export const useChatStore = defineStore('chatStore', () => {
     if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
     const days = Math.floor(hours / 24);
     return `${days} ${days === 1 ? 'day' : 'days'} ago`;
-  };  
+  };
 
   const updateMessageTimes = () => {
     chats.value = chats.value.map(chat => ({
       ...chat,
-      time: formatTime(chat.last_message_time) 
+      time: formatTimeAgo(chat.last_message_time) 
     }));
   };
 
@@ -123,33 +130,29 @@ export const useChatStore = defineStore('chatStore', () => {
       if (chatIndex !== -1) {
         console.log("Updating existing chat:", chats.value[chatIndex]);
   
-        if (data.username === store.user.username) {
-          // If the message is from the sender, only update the last_message and last_message_time
-          chats.value[chatIndex] = {
-            ...chats.value[chatIndex],
-            last_message_time: data.last_message_time,
-            last_message: data.last_message,
-          };
-        } else {
-          // If the message is from the recipient, update relevant details
-          chats.value[chatIndex] = {
-            ...chats.value[chatIndex],
-            unread_count: data.unread_count,
-            last_message_time: data.last_message_time,
-            last_message: data.last_message
-          };
+        // Ensure user field is not overwritten
+        const updatedChat = {
+          ...chats.value[chatIndex],
+          last_message_time: data.last_message_time,
+          last_message: data.last_message,
+        };
+  
+        if (data.user !== store.user.username) {
+          // If the message is from the recipient, update unread count
+          updatedChat.unread_count = data.unread_count || chats.value[chatIndex].unread_count;
         }
+  
+        chats.value[chatIndex] = updatedChat;
         console.log("Updated chat:", chats.value[chatIndex]);
       } else {
         console.log("Adding new chat:", data);
         chats.value.push({
           chat_id: data.chat_id,
-          user: data.user,
-          unread_count: data.unread_count,
+          user: data.user, // Ensure user is added correctly for new chats
+          unread_count: data.unread_count || 0,
           last_message_time: data.last_message_time,
-          message: data.message,
-          profile_picture: data.profile_picture,
-          last_message: data.last_message
+          last_message: data.last_message,
+          profile_picture: data.profile_picture || '', // Ensure profile picture is handled
         });
         console.log("New chat added:", data);
       }
@@ -222,6 +225,7 @@ export const useChatStore = defineStore('chatStore', () => {
     handleWebSocketError,
     handleWebSocketClose,
     handleActiveUsersFetched,
-    deleteMessagesForUser
+    deleteMessagesForUser,
+    formatTimeAgo
   };
 });

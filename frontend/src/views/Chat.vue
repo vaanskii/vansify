@@ -27,10 +27,13 @@
         </div>
         <div class="message-footer">
           <span v-if="message.isOwnMessage">
-            <span v-if="message.status">({{ message.status }})</span> 
+            <span v-if="message.status === 'sending'">Sending...</span>
+            <span v-if="message.status === 'sent'"><i class="fa-solid fa-check"></i></span>
+            <span v-if="message.status === 'delivered'"><i class="fa-solid fa-check-double"></i></span>
+            <span v-if="message.status === 'read'"><i class="fa-solid fa-check-double" style="color: #075ced;"></i></span>
           </span>
-          <span>{{ formatTime(message.created_at) }}</span>
-          <button v-if="message.isOwnMessage" @click="deleteMessage(message.id)" class="delete-button">Unsent</button>
+          <span>{{ formatTimeAgo(message.created_at) }}</span>
+          <button v-if="message.isOwnMessage" @click="deleteMessage(message.id)" class="delete-button"><i class="fa-solid fa-trash" style="color: #c11a1a;"></i></button>
         </div>
       </div>
     </div>
@@ -59,6 +62,7 @@ import { userStore } from '@/stores/user';
 import emitter from '@/eventBus';
 import notify from '@/utils/notify';
 import "@/assets/chat.css"
+import { parseISO, formatDistanceToNow } from 'date-fns';
 
 const apiUrl = import.meta.env.VITE_WS_URL;
 const messages = ref([]);
@@ -124,6 +128,11 @@ const removeOfflineMessages = () => {
   localStorage.removeItem(offlineStorageKey);
 };
 
+function formatTimeAgo(utcTime) {
+  const localTime = parseISO(utcTime)
+  return formatDistanceToNow(localTime, {addSuffix: true});
+}
+
 const formatTime = (timestamp) => {
   const timeDiff = Math.floor((Date.now() - new Date(timestamp)) / 1000);
   if (timeDiff < 60) return 'Just now';
@@ -138,7 +147,7 @@ const formatTime = (timestamp) => {
 const updateMessageTimes = () => {
   messages.value = messages.value.map(message => ({
     ...message,
-    time: formatTime(message.created_at) 
+    time: formatTimeAgo(message.created_at) 
   }));
 };
 
@@ -317,7 +326,7 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
       const newMessages = response.data.map(message => {
         const localTime = new Date(message.created_at).toLocaleString();
         console.log('Converted time:', localTime);
-        
+
         return {
           ...message,
           isOwnMessage: message.username === username,
@@ -333,6 +342,9 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
           messages.value.push(newMessage); // Append to the bottom
         }
       });
+
+      // Sort messages by created_at to maintain correct order
+      messages.value = messages.value.slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
       if (newMessages.length < limit) {
         hasMoreMessages.value = false; 
