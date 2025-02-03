@@ -1,5 +1,5 @@
 # Vansify
-
+ 
 This is a Vansify API built with Go and Gin. It provides endpoints for user registration, authentication, and managing user profiles, including following and unfollowing functionality.
 
 ## Table of Contents
