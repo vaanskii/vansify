@@ -528,6 +528,7 @@ const sendMessage = async () => {
     message: trimmedMessage || "Sent a file",
     created_at: new Date().toISOString(),
     isOwnMessage: true,
+    status: 'sending', // Set initial status to 'sending'
   };
 
   console.log("message to send", messageToSend);
@@ -546,6 +547,9 @@ const sendMessage = async () => {
     }
   }
 
+  // Add the message immediately to the chat history
+  messages.value.push(messageToSend);
+
   if (ws && isConnected.value) {
     ws.send(JSON.stringify(messageToSend));
     const receiveResponse = new Promise((resolve, reject) => {
@@ -563,9 +567,12 @@ const sendMessage = async () => {
 
     try {
       const messageID = await receiveResponse;
-      messageToSend.id = messageID;
-      messageToSend.status = 'sent';
-      messages.value.push(messageToSend);
+      // Find the message in the chat history and update its status and id
+      const messageIndex = messages.value.findIndex(msg => msg.created_at === messageToSend.created_at && msg.username === username);
+      if (messageIndex !== -1) {
+        messages.value[messageIndex].id = messageID;
+        messages.value[messageIndex].status = 'sent'; // Update the status to 'sent'
+      }
     } catch (error) {
       console.error("Error receiving message ID:", error);
     }
@@ -587,6 +594,7 @@ watch(isConnected, (newVal) => {
     removeOfflineMessages();
   }
 });
+
 
 watch(messages, () => {
   nextTick(scrollToBottom)
