@@ -12,7 +12,6 @@ import NotificationsView from '@/views/NotificationsView.vue';
 import { userStore } from '@/stores/user';
 import GoogleCallback from '@/components/GoogleCallback.vue';
 import ChooseUsername from '@/components/ChooseUsername.vue';
-import testchat from '@/views/testchat.vue';
 import InboxWrapper from '@/views/InboxWrapper.vue';
 
 // Function to determine if the device is mobile
@@ -136,14 +135,6 @@ const routes = [
     component: ChooseUsername,
     meta: {
       title: 'Choose Username',
-    }
-  },
-  {
-    path: '/test-chat',
-    name: 'test',
-    component: testchat,
-    meta: {
-      title: 'test',
     }
   },
   // Add routes based on device type
