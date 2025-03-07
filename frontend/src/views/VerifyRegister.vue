@@ -4,7 +4,7 @@
       <p v-if="message">{{ message }}</p>
       <div v-if="loading" class="loader">Loading...</div>
       <div v-if="error" class="error">{{ error }}</div>
-    </div>
+    </div> 
   </template>
   
   <script setup>
