@@ -1,5 +1,5 @@
 <template>
-  <div class="login-container flex flex-col gap-3 max-w-96 w-full mx-auto px-4">
+  <div class="login-container flex flex-col gap-3 max-w-[26rem] w-full mx-auto px-10 py-10">
     <form @submit.prevent="login">
       <div class="relative z-0">
           <input type="text" id="username" v-model="username" autocomplete="username"  class="block py-2.5 px-0 w-full text-sm text-gray-900 bg-transparent border-0 border-b-2 border-gray-300 appearance-none dark:text-black dark:border-gray-600 dark:focus:border-blue-500 focus:outline-none focus:ring-0 focus:border-blue-600 peer" placeholder=" " />
@@ -16,7 +16,7 @@
         </label>
         <router-link class="text-[#757575] sm:mt-0 mt-2" to="/forgot-password">Forgot Password?</router-link>
       </div>
-      <button class="w-full mt-6 shadow shadow-hover cursor-pointer h-11 rounded-[3px] text-[14px] font-medium text-[#757575]" type="submit">
+      <button class="w-full mt-6 shadow shadow-hover-sm cursor-pointer h-11 rounded-[3px] text-[14px] font-medium text-[#757575]" type="submit">
         <span v-if="isLoading"> 
           <div class="animate-spin inline-block size-6 border-3 border-current border-t-transparent text-[#757575] rounded-full" role="status" aria-label="loading">
             <span class="sr-only">Loading...</span>
@@ -25,7 +25,18 @@
         <span v-else>Login</span>
       </button> 
     </form>
-    <button @click="loginWithGoogle" type="button" class="login-with-google-btn" >Sign in with Google</button>
+    <button @click="loginWithGoogle" type="button" class="login-with-google-btn mb-1" >Sign in with Google</button>
+    <div v-if="router.currentRoute.value.path === '/'">
+      <div class="flex items-center my-4">
+      <div class="flex-grow border-t border-gray-300"></div>
+      <span class="mx-4 text-sm text-gray-500">or</span>
+      <div class="flex-grow border-t border-gray-300"></div>
+    </div>
+
+    <router-link to="/signup" class="w-full mt-2 shadow shadow-hover-md bg-[#757575] hover:bg-[#707070] cursor-pointer h-11 rounded-[3px] text-[14px] font-medium text-white flex items-center justify-center">
+        Create New Account
+    </router-link>
+    </div>
     <div v-if="error" class="error">{{ error }}</div>
     <div v-if="message" class="message">{{ message }}</div>
   </div>
