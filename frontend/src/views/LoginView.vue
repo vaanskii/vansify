@@ -1,32 +1,39 @@
 <template>
-  <div>
+  <div class="login-container flex flex-col gap-3 max-w-96 w-full mx-auto px-4">
     <form @submit.prevent="login">
-      <div>
-        <label for="username">Username:</label>
-        <input type="text" v-model="username" id="username" required>
+      <div class="relative z-0">
+          <input type="text" id="username" v-model="username" autocomplete="username"  class="block py-2.5 px-0 w-full text-sm text-gray-900 bg-transparent border-0 border-b-2 border-gray-300 appearance-none dark:text-black dark:border-gray-600 dark:focus:border-blue-500 focus:outline-none focus:ring-0 focus:border-blue-600 peer" placeholder=" " />
+          <label for="username" class="absolute text-sm text-gray-500 dark:text-gray-[#757575] duration-300 transform -translate-y-6 scale-75 top-3 -z-10 origin-[0] peer-focus:start-0 peer-focus:text-blue-600 peer-focus:dark:text-blue-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-6 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto">Username</label>
       </div>
-      <div>
-        <label for="password">Password:</label>
-        <input type="password" v-model="password" id="password" required>
+      <div class="relative z-0 mt-5">
+        <input type="password" id="password" v-model="password" autocomplete="current-password" class="block py-2.5 px-0 w-full text-sm text-gray-900 bg-transparent border-0 border-b-2 border-gray-300 appearance-none dark:text-black dark:border-gray-600 dark:focus:border-blue-500 focus:outline-none focus:ring-0 focus:border-blue-600 peer" placeholder=" " />
+        <label for="password" class="absolute text-sm text-gray-500 dark:text-gray-[#757575] duration-300 transform -translate-y-6 scale-75 top-3 -z-10 origin-[0] peer-focus:start-0 peer-focus:text-blue-600 peer-focus:dark:text-blue-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-6 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto">Password</label>
       </div>
-      <div>
-        <router-link to="/forgot-password">Forgot Password?</router-link>
-      </div>
-      <div>
-        <label>
-          <input type="checkbox" v-model="rememberMe">
-          Remember Me
+      <div class="flex items-center justify-between mt-4 sm:flex-row flex-col sm:gap-0 gap-2">
+        <label class="flex items-center space-x-2 text-[#757575]">
+          <input class="text-sm" type="checkbox" v-model="rememberMe">
+          <span>Remember Me</span>
         </label>
+        <router-link class="text-[#757575] sm:mt-0 mt-2" to="/forgot-password">Forgot Password?</router-link>
       </div>
-      <button type="submit">Login</button>
+      <button class="w-full mt-6 shadow shadow-hover cursor-pointer h-11 rounded-[3px] text-[14px] font-medium text-[#757575]" type="submit">
+        <span v-if="isLoading"> 
+          <div class="animate-spin inline-block size-6 border-3 border-current border-t-transparent text-[#757575] rounded-full" role="status" aria-label="loading">
+            <span class="sr-only">Loading...</span>
+          </div>
+        </span>
+        <span v-else>Login</span>
+      </button> 
     </form>
-    <button @click="loginWithGoogle">Login with Google</button>
+    <button @click="loginWithGoogle" type="button" class="login-with-google-btn" >Sign in with Google</button>
     <div v-if="error" class="error">{{ error }}</div>
     <div v-if="message" class="message">{{ message }}</div>
   </div>
 </template>
 
 <script setup>
+import "@/assets/buttons.css"
+import "@/assets/main.css"
 import { ref } from 'vue';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
@@ -38,11 +45,13 @@ const password = ref('');
 const rememberMe = ref(false);
 const error = ref('');
 const message = ref('');
+const isLoading = ref(false);
 const router = useRouter();
 const store = userStore();
 const activeUsersStore = useActiveUsersStore();
 
 const login = async () => {
+  isLoading.value = true;
   try {
     console.log('Login function called');
     const response = await axios.post('/v1/login', {
@@ -71,6 +80,8 @@ const login = async () => {
   } catch (err) {
     console.error('Login failed:', err);
     error.value = err.response ? err.response.data.error : 'An error occurred';
+  } finally {
+    isLoading.value = false;
   }
 };
 
@@ -85,5 +96,13 @@ const loginWithGoogle = () => {
 input[type="text"],
 input[type="password"] {
   font-size: 16px;
+}
+
+.login-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  gap: 1;
 }
 </style>
