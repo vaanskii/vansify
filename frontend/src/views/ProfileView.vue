@@ -6,7 +6,6 @@
         <img v-if="imageIsLoaded" class="image" :src="resolveProfilePicture(user.profile_picture)" alt="Profile Picture"/>
         <div v-else class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>
       </div>
-      <p><strong>Gender:</strong> {{ user.gender }}</p>
       <p><strong>Followers:</strong> <button @click="toggleFollowers">{{ user.followers_count }}</button></p>
       <p><strong>Followings:</strong> <button @click="toggleFollowings">{{ user.followings_count }}</button></p>
       <button v-if="!isCurrentUser" @click="toggleFollow">{{ isFollowing ? 'Unfollow' : 'Follow' }}</button>

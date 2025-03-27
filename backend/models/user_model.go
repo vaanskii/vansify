@@ -12,7 +12,6 @@ type User struct {
     Password         string      `json:"password"`
     Email            string      `json:"email"`
     ProfilePicture    string      `json:"profile_picture"`
-    Gender           string      `json:"gender"`
     Verified          bool        `json:"verified"`
     OauthUser        bool        `json:"oauth_user"`
     CreatedAt        time.Time   `json:"created_at"`

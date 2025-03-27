@@ -2,6 +2,7 @@ package user
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"strings"
 
@@ -20,7 +21,6 @@ type UserProfile struct {
 	Followers       []Follower    `json:"followers"`
 	Followings      []Following   `json:"followings"`
 	ProfilePicture   string        `json:"profile_picture"`
-	Gender 			string   	  `json:"gender"`
     OauthUser       bool          `json:"oauth_user"`
 }
 
@@ -40,7 +40,7 @@ func GetUserByUsername(c *gin.Context) {
     var user models.User
 
     // Fetch user details by username
-    err := db.DB.QueryRow("SELECT id, username, email, profile_picture, gender, verified, created_at, oauth_user FROM users WHERE username = ?", username).Scan(&user.ID, &user.Username, &user.Email, &user.ProfilePicture, &user.Gender, &user.Verified, &user.CreatedAt, &user.OauthUser)
+    err := db.DB.QueryRow("SELECT id, username, email, profile_picture, verified, created_at, oauth_user FROM users WHERE username = ?", username).Scan(&user.ID, &user.Username, &user.Email, &user.ProfilePicture, &user.Verified, &user.CreatedAt, &user.OauthUser)
     if err != nil {
         c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
         return
@@ -51,7 +51,6 @@ func GetUserByUsername(c *gin.Context) {
         ID:             user.ID,
         Username:       user.Username,
         ProfilePicture: user.ProfilePicture,
-        Gender:         user.Gender,
         OauthUser:      user.OauthUser,
     }
 
@@ -164,14 +163,21 @@ func GetUserChats(c *gin.Context) {
             otherUser = user2
         }
 
+        // Append 'Z' to indicate UTC time
+        lastMessageTimeStr := lastMessageTime.String
+        if lastMessageTimeStr != "" {
+            lastMessageTimeStr += "Z"
+        }
+
         chats = append(chats, map[string]interface{}{
             "chat_id":            chatID,
             "user":               otherUser,
             "unread_count":       unreadCount,
-            "last_message_time":  lastMessageTime.String,
+            "last_message_time":  lastMessageTimeStr,
             "profile_picture":    profilePicture,
             "last_message":       lastMessage.String, 
         })
+        log.Print("Chats", chats)
     }
 
     if err := rows.Err(); err != nil {
@@ -191,6 +197,7 @@ func contains(deletedFor, username string) bool {
     }
     return false
 }
+
 
 func GetActiveUsersHandler(c *gin.Context) {
     claims, exists := c.Get("claims")
