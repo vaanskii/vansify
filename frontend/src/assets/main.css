@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 input[type="text"],
-input[type="password"] {
+input[type="password"]
+input[type="email"] {
   font-size: 16px;
 }
 
