@@ -131,7 +131,7 @@ const routes = [
     }
   },
   {
-    path: '/setauth',
+    path: '/authset',
     name: 'ChooseUsername',
     component: ChooseUsername,
     meta: {

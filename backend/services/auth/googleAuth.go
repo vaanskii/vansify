@@ -207,7 +207,7 @@ func AuthCallback(c *gin.Context) {
 
     // Redirect with the token
     frontendUrl := os.Getenv("FRONTEND_URL")
-    redirectURL := fmt.Sprintf("%s/setauth?token=%s", frontendUrl, url.QueryEscape(shortToken))
+    redirectURL := fmt.Sprintf("%s/authset?token=%s", frontendUrl, url.QueryEscape(shortToken))
     c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
