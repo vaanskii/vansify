@@ -34,6 +34,11 @@ const (
     IsProd = false
 )
 
+var tokenStore = struct {
+    sync.Mutex
+    tokens map[string]string
+}{tokens: make(map[string]string)}
+
 type UserRequest struct {
     Username string `json:"username" binding:"required"`
     Email    string `json:"email" binding:"required"`
@@ -116,17 +121,11 @@ func AuthHandler(c *gin.Context) {
     http.Redirect(c.Writer, c.Request, url, http.StatusTemporaryRedirect)
 }
 
-// Create a thread-safe in-memory store for temporary tokens
-var tokenStore = struct {
-    sync.Mutex
-    tokens map[string]string // Maps token -> email
-}{tokens: make(map[string]string)}
 
-// GenerateShortToken creates a random 10-character token
 func GenerateShortToken() string {
-    b := make([]byte, 8) // Generate 8 random bytes
+    b := make([]byte, 8)
     rand.Read(b)
-    return base64.RawURLEncoding.EncodeToString(b)[:10] // Encode as string and trim to 10 characters
+    return base64.RawURLEncoding.EncodeToString(b)[:10]
 }
 
 func AuthCallback(c *gin.Context) {
@@ -184,24 +183,20 @@ func AuthCallback(c *gin.Context) {
         redirectURL := fmt.Sprintf("%s/auth/google/callback?username=%s&access_token=%s&refresh_token=%s&id=%d&oauth_user=%t&active=%t",
             frontendUrl, url.QueryEscape(existingUser.Username), url.QueryEscape(accessToken), url.QueryEscape(refreshToken), existingUser.ID, existingUser.OauthUser, existingUser.Active)
 
-        // Send the response first
         c.Redirect(http.StatusTemporaryRedirect, redirectURL)
         return
     }
 
-    // User does not exist: Generate a one-time token
     shortToken := GenerateShortToken()
 
-    // Store the token and associated email in memory (thread-safe)
     tokenStore.Lock()
-    tokenStore.tokens[shortToken] = user.Email // Link token to email securely
+    tokenStore.tokens[shortToken] = user.Email 
     tokenStore.Unlock()
 
-    // Clean up the token after 10 minutes (time-bound single-use token)
     go func(token string) {
         time.Sleep(10 * time.Minute)
         tokenStore.Lock()
-        delete(tokenStore.tokens, token) // Remove token after expiration
+        delete(tokenStore.tokens, token)
         tokenStore.Unlock()
     }(shortToken)
 
@@ -229,7 +224,7 @@ func ValidateOauthToken(c *gin.Context) {
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{"email": email}) // Return the associated email
+    c.JSON(http.StatusOK, gin.H{"email": email}) 
 }
 
 
