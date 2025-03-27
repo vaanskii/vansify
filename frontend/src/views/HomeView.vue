@@ -1,7 +1,6 @@
 <template>
   <div v-if="!store.user.isAuthenticated">
-    <unauthenticatedNavigation />
-    <unauthenticatedMain />
+    <LoginView />
   </div>
   <div v-else>
     <h1>Home page</h1>
@@ -9,9 +8,8 @@
 </template>
 
 <script setup>
-import UnauthenticatedMain from '@/components/UnauthenticatedMain.vue';
-import UnauthenticatedNavigation from '@/components/UnauthenticatedNavigation.vue';
 import { userStore } from '@/stores/user';
+import LoginView from './LoginView.vue';
 
 const store = userStore();
 
