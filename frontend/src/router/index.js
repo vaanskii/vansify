@@ -15,7 +15,7 @@ import ChooseUsername from '@/components/ChooseUsername.vue';
 import InboxWrapper from '@/views/InboxWrapper.vue';
 
 // Function to determine if the device is mobile
-const isMobile = () => window.innerWidth <= 768; // Change breakpoint as needed
+const isMobile = () => window.innerWidth <= 768;
 
 const mobileRoutes = [
   {
@@ -138,7 +138,6 @@ const routes = [
       title: 'Auth Set',
     }
   },
-  // Add routes based on device type
   ...(isMobile() ? mobileRoutes : desktopRoutes)
 ];
 
