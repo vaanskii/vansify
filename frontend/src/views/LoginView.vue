@@ -108,11 +108,6 @@ const loginWithGoogle = () => {
 </script>
 
 <style scoped>
-input[type="text"],
-input[type="password"] {
-  font-size: 16px;
-}
-
 .login-container {
   position: absolute;
   top: 50%;
