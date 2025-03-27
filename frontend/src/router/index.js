@@ -43,7 +43,8 @@ const desktopRoutes = [
     path: '/inbox',
     component: InboxWrapper,
     meta: {
-      title: "Inbox"
+      title: "Inbox",
+      requiresAuth: true,
     },
     children: [
       {
@@ -77,11 +78,11 @@ const routes = [
     }
   },
   {
-    path: '/register',
-    name: 'register',
+    path: '/signup',
+    name: 'signup',
     component: RegisterView,
     meta: {
-      title: 'Register'
+      title: 'signup'
     }
   },
   {
@@ -130,7 +131,7 @@ const routes = [
     }
   },
   {
-    path: '/choose-username',
+    path: '/setauth',
     name: 'ChooseUsername',
     component: ChooseUsername,
     meta: {
