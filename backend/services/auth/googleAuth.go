@@ -23,6 +23,7 @@ import (
 	"github.com/markbates/goth/providers/google"
 	"github.com/vaanskii/vansify/db"
 	"github.com/vaanskii/vansify/models"
+	"github.com/vaanskii/vansify/services/chat"
 	activeUsers "github.com/vaanskii/vansify/services/user"
 	"github.com/vaanskii/vansify/utils"
 	"golang.org/x/oauth2"
@@ -184,6 +185,43 @@ func AuthCallback(c *gin.Context) {
             frontendUrl, url.QueryEscape(existingUser.Username), url.QueryEscape(accessToken), url.QueryEscape(refreshToken), existingUser.ID, existingUser.OauthUser, existingUser.Active)
 
         c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+
+        // Reintegrating active status update
+        go func() {
+            _, err := db.DB.Exec("UPDATE users SET active = true, last_active = NULL WHERE email = ?", user.Email)
+            if err != nil {
+                log.Println("Error updating user active status:", err)
+                return
+            }
+
+            // Fetch active users and broadcast
+            activeUsers.FetchActiveUsersAndBroadcast(db.DB)
+
+            // Update message statuses for all chats involving the user
+            rows, err := db.DB.Query("SELECT chat_id, user1, user2 FROM chats WHERE user1 = ? OR user2 = ?", existingUser.Username, existingUser.Username)
+            if err != nil {
+                log.Println("Error querying chats for user:", err)
+                return
+            }
+            defer rows.Close()
+
+            for rows.Next() {
+                var chatID, user1, user2 string
+                if err := rows.Scan(&chatID, &user1, &user2); err != nil {
+                    log.Println("Error scanning chat ID:", err)
+                    continue
+                }
+
+                var otherUser string
+                if existingUser.Username == user1 {
+                    otherUser = user2
+                } else {
+                    otherUser = user1
+                }
+
+                go chat.UpdateStatusWhenUserBecomesActive(chatID, existingUser.Username, otherUser)
+            }
+        }()
         return
     }
 
@@ -205,6 +243,7 @@ func AuthCallback(c *gin.Context) {
     redirectURL := fmt.Sprintf("%s/authset?token=%s", frontendUrl, url.QueryEscape(shortToken))
     c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
+
 
 func ValidateOauthToken(c *gin.Context) {
     var request struct {
