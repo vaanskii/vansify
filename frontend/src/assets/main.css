@@ -1,11 +1,30 @@
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+@import "tailwindcss";
 
+@layer utilities {
+  .shadow-hover-sm:hover {
+    box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.25);
+  }
 
-html, body {
-    height: 100%;
-    width: 100%;
+  .shadow-hover-md:hover {
+    box-shadow: 0 -2px 2px rgba(0, 0, 0, 0), 0 6px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .shadow {
+    box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.04), 0 1px 1px rgba(0, 0, 0, 0.25);
+  }
+
+  .box-shadow {
+    box-shadow: 0 -2px 2px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+  }
+
+  /* Responsive utilities */
+  @media (min-width: 340px) {
+    .xs\:flex-row {
+      flex-direction: row;
+    }
+    .xs\:gap-0 {
+      gap: 0.5rem;
+    }
+  }
 }
