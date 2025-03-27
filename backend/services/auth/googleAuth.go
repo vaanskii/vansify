@@ -124,9 +124,9 @@ func AuthHandler(c *gin.Context) {
 
 
 func GenerateShortToken() string {
-    b := make([]byte, 8)
+    b := make([]byte, 12)
     rand.Read(b)
-    return base64.RawURLEncoding.EncodeToString(b)[:10]
+    return base64.RawURLEncoding.EncodeToString(b)[:16]
 }
 
 func AuthCallback(c *gin.Context) {
