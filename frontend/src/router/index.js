@@ -135,7 +135,7 @@ const routes = [
     name: 'ChooseUsername',
     component: ChooseUsername,
     meta: {
-      title: 'Choose Username',
+      title: 'Auth Set',
     }
   },
   // Add routes based on device type
@@ -147,26 +147,34 @@ const router = createRouter({
   routes
 });
 
-// Navigation guard to update document title and check authentication
+
 router.beforeEach((to, from, next) => {
   const store = userStore();
   const isAuthenticated = store.user.isAuthenticated;
 
-  if (to.matched.some(record => record.meta.requiresAuth) && !isAuthenticated) {
+  const authRoutes = [
+    'google auth',
+    'ChooseUsername',
+    'verify',
+    'reset',
+    'forgot',
+    'signup',
+    'login'
+  ];
+
+  if (isAuthenticated && authRoutes.includes(to.name)) {
+    next({ name: 'home' });
+  } else if (to.matched.some(record => record.meta.requiresAuth) && !isAuthenticated) {
     next({ name: 'login' });
   } else {
-    if ((to.name === 'login' || to.name === 'register') && isAuthenticated) {
-      next({ name: 'home' });
+    if (to.name === 'userprofile') {
+      document.title = `${to.params.username} • Vansify`;
+    } else if (to.name === 'chat' && to.query.user) {
+      document.title = `Inbox • ${to.query.user}`;
     } else {
-      if (to.name === 'userprofile') {
-        document.title = `${to.params.username} • Vansify`;
-      } else if (to.name === 'chat' && to.query.user) {
-        document.title = `Inbox • ${to.query.user}`;
-      } else {
-        document.title = to.meta.title || 'Default Title';
-      }
-      next();
+      document.title = to.meta.title || 'Default Title';
     }
+    next();
   }
 });
 
