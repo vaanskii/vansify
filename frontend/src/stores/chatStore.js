@@ -3,6 +3,7 @@ import { ref, computed} from 'vue';
 import axios from 'axios';
 import emitter from '@/eventBus';
 import { userStore } from './user';
+import { useRouter } from 'vue-router';
 import { parseISO, formatDistanceToNow } from 'date-fns';
 
 export const useChatStore = defineStore('chatStore', () => {
@@ -12,7 +13,7 @@ export const useChatStore = defineStore('chatStore', () => {
   const loader = ref(true);
   const store = userStore();
   const activeUsers = ref([]);
-
+  const router = useRouter();
   const fetchChats = async () => {
     try {
         const response = await axios.get('/v1/me/chats', {
@@ -20,20 +21,23 @@ export const useChatStore = defineStore('chatStore', () => {
                 Authorization: `Bearer ${store.user.access}`
             }
         });
+
         if (response.data && response.data.chats) {
-            console.log("chats", response.data.chats)
-            console.log("last_message formated time", new Date(response.data.chats).toLocaleString())
+            console.log("chats", response.data.chats);
+
             const newChats = response.data.chats
-                .filter(chat => !chat.deleted_for || !chat.deleted_for.includes(store.user.username)) // Filter out deleted chats
+                .filter(chat => 
+                    (!chat.deleted_for || !chat.deleted_for.includes(store.user.username)) && chat.last_message)
                 .map(chat => ({
                     chat_id: chat.chat_id,
                     user: chat.user,
                     unread_count: chat.unread_count,
                     last_message_time: chat.last_message_time || "",
                     profile_picture: chat.profile_picture,
-                    last_message: chat.last_message || "No messages yet"
+                    last_message: chat.last_message
                 }));
-            chats.value = newChats;
+
+            chats.value = newChats.length > 0 ? newChats : [];
             loader.value = false;
         } else {
             chats.value = [];
@@ -53,6 +57,7 @@ export const useChatStore = defineStore('chatStore', () => {
         }
       });
       chats.value = chats.value.filter(chat => chat.chat_id !== chatID);
+      router.push("/inbox")
     } catch (err) {
       error.value = err.response ? err.response.data.error : 'An error occurred';
     }
@@ -70,6 +75,7 @@ export const useChatStore = defineStore('chatStore', () => {
   
       // Remove the chat from the list immediately
       chats.value = chats.value.filter(chat => chat.chat_id !== chatID);
+      router.push("/inbox")
       console.log("Updated chats:", chats.value);
     } catch (err) {
       console.error('Error:', err.response ? err.response.data.error : 'An error occurred');
@@ -83,9 +89,16 @@ export const useChatStore = defineStore('chatStore', () => {
 
 
   function formatTimeAgo(utcTime) {
-    const localTime = parseISO(utcTime)
-    return formatDistanceToNow(localTime, {addSuffix: true});
-  }
+    if (!utcTime || isNaN(new Date(utcTime).getTime())) {
+        console.warn("Invalid utcTime:", utcTime);
+        return "";
+    }
+
+    const localTime = parseISO(utcTime);
+    return formatDistanceToNow(localTime, { addSuffix: true });
+}
+
+
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
@@ -130,14 +143,18 @@ export const useChatStore = defineStore('chatStore', () => {
       if (chatIndex !== -1) {
         console.log("Updating existing chat:", chats.value[chatIndex]);
   
-        // Ensure user field is not overwritten
+        // Determine whether the current user is the sender or the recipient
+        const isSender = data.sender === store.user.username;
+  
         const updatedChat = {
           ...chats.value[chatIndex],
           last_message_time: data.last_message_time,
           last_message: data.last_message,
+          user: isSender ? data.receiver : data.sender, // Update username based on role
+          profile_picture: isSender ? data.receiver_profile_picture : data.sender_profile_picture, // Update profile picture based on role
         };
   
-        if (data.user !== store.user.username) {
+        if (!isSender) {
           // If the message is from the recipient, update unread count
           updatedChat.unread_count = data.unread_count || chats.value[chatIndex].unread_count;
         }
@@ -146,13 +163,17 @@ export const useChatStore = defineStore('chatStore', () => {
         console.log("Updated chat:", chats.value[chatIndex]);
       } else {
         console.log("Adding new chat:", data);
+  
+        // Determine whether the current user is the sender or the recipient
+        const isSender = data.sender === store.user.username;
+  
         chats.value.push({
           chat_id: data.chat_id,
-          user: data.user, // Ensure user is added correctly for new chats
+          user: isSender ? data.recipient : data.sender, // Add the appropriate username
           unread_count: data.unread_count || 0,
           last_message_time: data.last_message_time,
           last_message: data.last_message,
-          profile_picture: data.profile_picture || '', // Ensure profile picture is handled
+          profile_picture: isSender ? data.receiver_profile_picture : data.sender_profile_picture, // Add the appropriate profile picture
         });
         console.log("New chat added:", data);
       }
@@ -163,7 +184,7 @@ export const useChatStore = defineStore('chatStore', () => {
       console.error("Error processing WebSocket message:", e);
     }
   };
-
+  
   const fetchActiveUsers = async () => {
     try {
       const response = await axios.get('/v1/active-users', {
