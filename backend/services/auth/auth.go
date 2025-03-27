@@ -63,11 +63,6 @@ func RegisterUser(c *gin.Context) {
         c.JSON(http.StatusBadRequest, gin.H{"error": "Username is required"})
         return
     }
-
-    if user.Gender != "male" && user.Gender != "female" {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid gender value"})
-        return
-    }
     
     if user.Password == "" {
         c.JSON(http.StatusBadRequest, gin.H{"error": "Password is required"})
@@ -120,8 +115,8 @@ func RegisterUser(c *gin.Context) {
     user.Verified = false
 
     // Save user to the database
-    _, err = db.DB.Exec("INSERT INTO users (username, password, email, profile_picture, gender, verified, oauth_user) VALUES (?, ?, ?, ?, ?, ?, ?)", 
-        user.Username, user.Password, user.Email, user.ProfilePicture, user.Gender, user.Verified, user.OauthUser)
+    _, err = db.DB.Exec("INSERT INTO users (username, password, email, profile_picture, verified, oauth_user) VALUES (?, ?, ?, ?, ?, ?)", 
+        user.Username, user.Password, user.Email, user.ProfilePicture, user.Verified, user.OauthUser)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error saving user to database"})
         return

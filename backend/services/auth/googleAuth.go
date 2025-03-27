@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,7 +23,6 @@ import (
 	"github.com/markbates/goth/providers/google"
 	"github.com/vaanskii/vansify/db"
 	"github.com/vaanskii/vansify/models"
-	"github.com/vaanskii/vansify/services/chat"
 	activeUsers "github.com/vaanskii/vansify/services/user"
 	"github.com/vaanskii/vansify/utils"
 	"golang.org/x/oauth2"
@@ -115,6 +116,19 @@ func AuthHandler(c *gin.Context) {
     http.Redirect(c.Writer, c.Request, url, http.StatusTemporaryRedirect)
 }
 
+// Create a thread-safe in-memory store for temporary tokens
+var tokenStore = struct {
+    sync.Mutex
+    tokens map[string]string // Maps token -> email
+}{tokens: make(map[string]string)}
+
+// GenerateShortToken creates a random 10-character token
+func GenerateShortToken() string {
+    b := make([]byte, 8) // Generate 8 random bytes
+    rand.Read(b)
+    return base64.RawURLEncoding.EncodeToString(b)[:10] // Encode as string and trim to 10 characters
+}
+
 func AuthCallback(c *gin.Context) {
     provider := c.Param("provider")
     type contextKey string
@@ -145,7 +159,9 @@ func AuthCallback(c *gin.Context) {
     saveToken("token.json", token)
 
     var existingUser models.User
-    err = db.DB.QueryRow("SELECT id, username, password, email, oauth_user, active FROM users WHERE email = ?", user.Email).Scan(&existingUser.ID, &existingUser.Username, &existingUser.Password, &existingUser.Email, &existingUser.OauthUser, &existingUser.Active)
+    err = db.DB.QueryRow("SELECT id, username, password, email, oauth_user, active FROM users WHERE email = ?", user.Email).Scan(
+        &existingUser.ID, &existingUser.Username, &existingUser.Password, &existingUser.Email, &existingUser.OauthUser, &existingUser.Active,
+    )
     if err == nil {
         log.Println("User already exists:", existingUser.Email)
 
@@ -165,54 +181,55 @@ func AuthCallback(c *gin.Context) {
         }
 
         frontendUrl := os.Getenv("FRONTEND_URL")
-        redirectURL := fmt.Sprintf("%s/auth/google/callback?email=%s&username=%s&access_token=%s&refresh_token=%s&id=%d&oauth_user=%t&active=%t",
-            frontendUrl, url.QueryEscape(existingUser.Email), url.QueryEscape(existingUser.Username), url.QueryEscape(accessToken), url.QueryEscape(refreshToken), existingUser.ID, existingUser.OauthUser, existingUser.Active)
+        redirectURL := fmt.Sprintf("%s/auth/google/callback?username=%s&access_token=%s&refresh_token=%s&id=%d&oauth_user=%t&active=%t",
+            frontendUrl, url.QueryEscape(existingUser.Username), url.QueryEscape(accessToken), url.QueryEscape(refreshToken), existingUser.ID, existingUser.OauthUser, existingUser.Active)
 
         // Send the response first
         c.Redirect(http.StatusTemporaryRedirect, redirectURL)
-
-        // Then update the user's active status, broadcast active users, and update message statuses
-        go func() {
-            _, err := db.DB.Exec("UPDATE users SET active = true, last_active = NULL WHERE email = ?", user.Email)
-            if err != nil {
-                log.Println("Error updating user active status:", err)
-                return
-            }
-
-            // Fetch active users and broadcast
-            activeUsers.FetchActiveUsersAndBroadcast(db.DB)
-
-            // Update message statuses for all chats involving the user
-            rows, err := db.DB.Query("SELECT chat_id, user1, user2 FROM chats WHERE user1 = ? OR user2 = ?", existingUser.Username, existingUser.Username)
-            if err != nil {
-                log.Println("Error querying chats for user:", err)
-                return
-            }
-            defer rows.Close()
-
-            for rows.Next() {
-                var chatID, user1, user2 string
-                if err := rows.Scan(&chatID, &user1, &user2); err != nil {
-                    log.Println("Error scanning chat ID:", err)
-                    continue
-                }
-
-                var otherUser string
-                if existingUser.Username == user1 {
-                    otherUser = user2
-                } else {
-                    otherUser = user1
-                }
-
-                go chat.UpdateStatusWhenUserBecomesActive(chatID, existingUser.Username, otherUser)
-            }
-        }()
         return
     }
 
+    // User does not exist: Generate a one-time token
+    shortToken := GenerateShortToken()
+
+    // Store the token and associated email in memory (thread-safe)
+    tokenStore.Lock()
+    tokenStore.tokens[shortToken] = user.Email // Link token to email securely
+    tokenStore.Unlock()
+
+    // Clean up the token after 10 minutes (time-bound single-use token)
+    go func(token string) {
+        time.Sleep(10 * time.Minute)
+        tokenStore.Lock()
+        delete(tokenStore.tokens, token) // Remove token after expiration
+        tokenStore.Unlock()
+    }(shortToken)
+
+    // Redirect with the token
     frontendUrl := os.Getenv("FRONTEND_URL")
-    redirectURL := fmt.Sprintf("%s/choose-username?email=%s", frontendUrl, url.QueryEscape(user.Email))
+    redirectURL := fmt.Sprintf("%s/setauth?token=%s", frontendUrl, url.QueryEscape(shortToken))
     c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+}
+
+func ValidateOauthToken(c *gin.Context) {
+    var request struct {
+        Token string `json:"token" binding:"required"`
+    }
+    if err := c.BindJSON(&request); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+        return
+    }
+
+    tokenStore.Lock()
+    email, exists := tokenStore.tokens[request.Token]
+    tokenStore.Unlock()
+
+    if !exists {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"email": email}) // Return the associated email
 }
 
 

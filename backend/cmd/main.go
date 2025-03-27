@@ -67,6 +67,7 @@ func main() {
         v1.GET("/auth/:provider", auth.AuthHandler) 
         v1.GET("/auth/:provider/callback", auth.AuthCallback)
         v1.POST("/create-user", auth.CreateUserWithUsername)
+        v1.POST("/validate-token", auth.ValidateOauthToken)
         
         // refresh token
         v1.POST("/refresh-token", utils.RefreshToken)
