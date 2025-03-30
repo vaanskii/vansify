@@ -4,7 +4,7 @@ import axios from 'axios';
 import emitter from '@/eventBus';
 import { userStore } from './user';
 import { useRouter } from 'vue-router';
-import { parseISO, formatDistanceToNow } from 'date-fns';
+import { parseISO, formatDistanceToNow, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 
 export const useChatStore = defineStore('chatStore', () => {
   const chats = ref([]);
@@ -89,31 +89,29 @@ export const useChatStore = defineStore('chatStore', () => {
 
 
   function formatTimeAgo(utcTime) {
-    if (!utcTime || isNaN(new Date(utcTime).getTime())) {
-        console.warn("Invalid utcTime:", utcTime);
-        return "";
+    const localTime = parseISO(utcTime);
+  
+    const minutesDiff = differenceInMinutes(new Date(), localTime);
+    if (minutesDiff < 1) {
+      return '1m';
+    }
+  
+    if (minutesDiff < 60) {
+      return `${minutesDiff}m`;
     }
 
-    const localTime = parseISO(utcTime);
+    const hoursDiff = differenceInHours(new Date(), localTime);
+    if (hoursDiff < 24) {
+      return `${hoursDiff}h`;
+    }
+  
+    const daysDiff = differenceInDays(new Date(), localTime);
+    if (daysDiff >= 1) {
+      return `${daysDiff}d`;
+    }
+  
     return formatDistanceToNow(localTime, { addSuffix: true });
-}
-
-
-
-  const formatTime = (timestamp) => {
-    if (!timestamp) return '';
-  
-    const timeDiff = Math.floor((Date.now() - new Date(timestamp)) / 1000);
-    if (isNaN(timeDiff)) return ''; 
-  
-    if (timeDiff < 60) return 'Just now';
-    const minutes = Math.floor(timeDiff / 60);
-    if (minutes < 60) return `${minutes} min ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
-    const days = Math.floor(hours / 24);
-    return `${days} ${days === 1 ? 'day' : 'days'} ago`;
-  };
+  }
 
   const updateMessageTimes = () => {
     chats.value = chats.value.map(chat => ({
@@ -237,7 +235,6 @@ export const useChatStore = defineStore('chatStore', () => {
     fetchChats,
     deleteChat,
     sortedChats,
-    formatTime,
     fetchActiveUsers,
     updateMessageTimes,
     handleWebSocketOpen,
