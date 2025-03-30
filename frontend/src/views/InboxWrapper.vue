@@ -1,29 +1,42 @@
 <template>
-    <div class="inbox-container">
-      <ChatListView class="chat-list" />
-      <router-view class="chat-view" />
-    </div>
-  </template>
+  <div class="inbox-container">
+    <ChatListView class="chat-list" />
+    <Chat class="chat-view" />
+  </div>
+</template>
   
   <script setup>
-  import ChatListView from './ChatListView.vue';
-  </script>
+import Chat from './Chat.vue';
+import ChatListView from './ChatListView.vue';
+</script>
   
-  <style scoped>
-  .inbox-container {
-    display: flex;
-    height: 100dvh;
+<style scoped>
+.inbox-container {
+  display: flex;
+  height: 100dvh;
+}
+
+.chat-list {
+  flex: 0 1 400px; 
+  border-right: 1px solid #ccc;
+  overflow-y: auto;
+}
+
+.chat-view {
+  flex: 1;
+  overflow-y: auto;
+}
+
+@media (width <= 1024px ) {
+    .chat-list {
+    flex: 0 1 70px; 
   }
-  
-  .chat-list {
-    flex: 0 1 25%; 
-    border-right: 1px solid #ccc;
-    overflow-y: auto;
-  }
-  
+}
+
+@media (width <= 48rem) {
   .chat-view {
-    flex: 1;
-    overflow-y: auto;
+    display: none;
   }
-  </style>
+}
+</style>
   
