@@ -93,13 +93,13 @@ export const useChatStore = defineStore('chatStore', () => {
   
     const minutesDiff = differenceInMinutes(new Date(), localTime);
     if (minutesDiff < 1) {
-      return '1m';
+      return 'Just now';
     }
   
     if (minutesDiff < 60) {
       return `${minutesDiff}m`;
     }
-
+    
     const hoursDiff = differenceInHours(new Date(), localTime);
     if (hoursDiff < 24) {
       return `${hoursDiff}h`;
@@ -112,6 +112,22 @@ export const useChatStore = defineStore('chatStore', () => {
   
     return formatDistanceToNow(localTime, { addSuffix: true });
   }
+
+
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+  
+    const timeDiff = Math.floor((Date.now() - new Date(timestamp)) / 1000);
+    if (isNaN(timeDiff)) return ''; 
+  
+    if (timeDiff < 60) return 'Just now';
+    const minutes = Math.floor(timeDiff / 60);
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+  };
 
   const updateMessageTimes = () => {
     chats.value = chats.value.map(chat => ({
@@ -235,6 +251,7 @@ export const useChatStore = defineStore('chatStore', () => {
     fetchChats,
     deleteChat,
     sortedChats,
+    formatTime,
     fetchActiveUsers,
     updateMessageTimes,
     handleWebSocketOpen,
