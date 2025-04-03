@@ -12,6 +12,12 @@ axios.defaults.baseURL = import.meta.env.VITE_API_URL
 const app = createApp(App)
 const pinia = createPinia()
 
+if (import.meta.env.PROD) {
+  console.log = () => {};
+  console.warn = () => {};
+  console.error = () => {};
+}
+
 app.use(pinia)
 app.use(router, axios)
 
