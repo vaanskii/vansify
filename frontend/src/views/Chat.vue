@@ -208,18 +208,34 @@
       </div>
     </div>
 
-      <div class="form-container">
-        <form @submit.prevent="sendMessage" v-if="!isLoading && chatID" class="message-form">
-          <textarea v-model="newMessage" placeholder="Type a message" class="message-input" rows="1" @input="adjustTextareaHeight" @keydown="handleKeyDown"></textarea>
-          <div class="fileUpload" @click="triggerFileInput">
-            <input type="file" class="upload" ref="fileInput" @change="onFileSelected" accept="image/*" style="display: none;"/>
-            <i class="fa-solid fa-image fa-lg"></i>
-          </div>
-          <button type="submit" class="send-button">
-            <i class="fa-solid fa-paper-plane fa-lg"></i>
+    <div class="form-container">
+      <form @submit.prevent="sendMessage" v-if="!isLoading && chatID" class="message-form relative">
+         <!-- Image Preview -->
+         <div v-if="imagePreview" class="absolute top-2 left-2 w-14 h-14">
+          <img :src="imagePreview" alt="Selected Image" class="w-full h-full object-cover rounded-lg shadow-md"/>
+          
+          <!-- Remove Image Button -->
+          <button @click="removeSelectedImage" class="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center">
+            ✕
           </button>
-        </form>
-      </div>
+        </div>
+        <textarea 
+          :class="{'h-[46px]': !imagePreview, '!pt-18': imagePreview}"
+          v-model="newMessage" placeholder="Type a message" class="message-input" rows="1" @input="adjustTextareaHeight" @keydown="handleKeyDown"
+        >
+        </textarea>
+
+        <div class="fileUpload" @click="triggerFileInput">
+          <input type="file" class="upload" ref="fileInput" @change="onFileSelected" accept="image/*" style="display: none;"/>
+          <i class="fa-solid fa-image fa-lg"></i>
+        </div>
+
+        <button type="submit" class="send-button">
+          <i class="fa-solid fa-paper-plane fa-lg"></i>
+        </button>
+      </form>
+    </div>
+
     </div>
   </div>
 </template>
@@ -235,6 +251,7 @@ import emitter from '@/eventBus';
 import notify from '@/utils/notify';
 import "@/assets/chat.css"
 import { parseISO, formatDistanceToNow, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
+import EXIF from "exif-js";
 
 const apiUrl = import.meta.env.VITE_WS_URL;
 const messages = ref([]);
@@ -740,12 +757,70 @@ const adjustTextareaHeight = (event) => {
   }
 };
 
+const imagePreview = ref("");
+
 const triggerFileInput = () => {
   fileInput.value.click();
 };
 
+const removeSelectedImage = () => {
+  imagePreview.value = "";
+  selectedFile.value = null;
+  fileInput.value.value = "";
+};
+
 const onFileSelected = (event) => {
-  selectedFile.value = event.target.files[0];
+  const file = event.target.files[0];
+  selectedFile.value = file;
+
+  if (file) {
+    imagePreview.value = URL.createObjectURL(file);
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const image = new Image();
+    image.src = e.target.result;
+
+    EXIF.getData(image, function () {
+      const orientation = EXIF.getTag(this, "Orientation");
+
+      if (orientation && orientation !== 1) {
+        rotateImage(image, orientation);
+      }
+    });
+  };
+
+  reader.readAsDataURL(file);
+};
+
+const rotateImage = (img, orientation, format) => {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  const width = img.width;
+  const height = img.height;
+
+  canvas.width = orientation > 4 ? height : width;
+  canvas.height = orientation > 4 ? width : height;
+
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+
+  switch (orientation) {
+    case 2: ctx.scale(-1, 1); break;
+    case 3: ctx.rotate(Math.PI); break;
+    case 4: ctx.scale(1, -1); break;
+    case 5: ctx.rotate(Math.PI / 2); ctx.scale(1, -1); break;
+    case 6: ctx.rotate(Math.PI / 2); break;
+    case 7: ctx.rotate(-Math.PI / 2); ctx.scale(1, -1); break;
+    case 8: ctx.rotate(-Math.PI / 2); break;
+  }
+
+  ctx.drawImage(img, -width / 2, -height / 2);
+  
+  canvas.toBlob((blob) => {
+    selectedFile.value = blob;
+  }, format, 1);
 };
 
 const uploadFile = async (file) => {
@@ -766,6 +841,7 @@ const uploadFile = async (file) => {
     });
 
     if (response.data) {
+      imagePreview.value = "";
       return response.data.fileURL;
     } else {
       throw new Error("File upload failed");

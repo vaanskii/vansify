@@ -168,5 +168,8 @@ input[type="file"] {
     border:none;
     background-color: transparent;
   }
+  .fileUpload:hover, .fileUpload:active, .fileUpload:focus {
+    background: transparent;
+  }
 }
 
