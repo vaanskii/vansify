@@ -1,55 +1,225 @@
 <template>
   <div class="chat-container">
     <div class="chat-box-container">
-      <div v-if="formattedMessages.length === 0 && !isLoading" class="no-messages">No messages yet</div>
-      <h2>Chat with {{ chatUser }}</h2>
-    <div v-if="!isLoading" class="messages-container" ref="messagesContainer">
-      <div v-if="loadingOlderMessages" class="loader">Loading...</div>
-      <div v-for="message in formattedMessages" :key="message.id" 
-           :class="{
-             'message': true, 
-             'sent': message.isOwnMessage && !message.file_url, 
-             'received': !message.isOwnMessage && !message.file_url, 
-             'sent-image': message.isOwnMessage && message.file_url, 
-             'received-image': !message.isOwnMessage && message.file_url
-           }">
-        <div class="message-header" v-if="message.username && !message.isOwnMessage" @click="goToProfile(message.username)">
-          <img :src="formatProfilePictureUrl(message.profile_picture)" alt="Profile Picture" class="profile-picture" />
-          <strong>{{ message.username }}</strong>
+      <div v-if="chatID" class="py-4 border-b-[1px] border-[#D4D4D4] flex flex-row items-center justify-between">
+        <h2 class="ml-4 hidden md:block cursor-pointer font-bold text-[20px]" @click="messageUtilsStore.goToProfile(chatUser)">{{ chatUser }}</h2>
+        <div class="flex flex-row items-center ml-4 block md:hidden gap-4">
+          <i class="fa-solid fa-angle-left fa-xl" @click="router.push('/inbox')"></i>
+          <h2 class="font-bold" @click="messageUtilsStore.goToProfile(chatUser)">{{ chatUser }}</h2>
         </div>
-        <div class="message-body">
-          <div v-if="message.file_url">
-            <img :src="message.file_url" alt="Uploaded Image" class="uploaded-image"/>
+
+      <!-- When sidebar is closed -->
+      <svg v-if="!isSidebarOpen" 
+          xmlns="http://www.w3.org/2000/svg" 
+          fill="none" 
+          viewBox="0 0 24 24" 
+          stroke-width="1.5" 
+          stroke="currentColor" 
+          class="size-7 cursor-pointer mr-4"
+          @click="toggleSidebar">
+        <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+      </svg>
+
+      <!-- When sidebar is open -->
+      <svg v-else 
+          xmlns="http://www.w3.org/2000/svg" 
+          viewBox="0 0 24 24" 
+          fill="currentColor" 
+          class="size-7 cursor-pointer mr-4"
+          @click="toggleSidebar">
+        <path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 0 1 .67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 1 1-.671-1.34l.041-.022ZM12 9a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clip-rule="evenodd" />
+      </svg>
+
+      </div>
+      <div v-if="!chatID" class="flex flex-col items-center justify-center h-screen">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-20">
+          <path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0 1 12 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 0 1-3.476.383.39.39 0 0 0-.297.17l-2.755 4.133a.75.75 0 0 1-1.248 0l-2.755-4.133a.39.39 0 0 0-.297-.17 48.9 48.9 0 0 1-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97ZM6.75 8.25a.75.75 0 0 1 .75-.75h9a.75.75 0 0 1 0 1.5h-9a.75.75 0 0 1-.75-.75Zm.75 2.25a.75.75 0 0 0 0 1.5H12a.75.75 0 0 0 0-1.5H7.5Z" clip-rule="evenodd" />
+        </svg>
+        <h1 class="text-2xl font-bold uppercase">Your messages</h1>
+        <h1 class="no-messages">choose chat to start messaging</h1>
+      </div>
+      <h1 v-if="formattedMessages.length === 0 && !isLoading" class="no-messages"></h1>
+      <div class="flex flex-row overflow-y-auto flex-grow-1">
+      <div v-if="!isLoading" class="messages-container" ref="messagesContainer">
+        <!-- Loader -->
+        <div v-if="loadingOlderMessages" class="flex items-center justify-center">
+          <div class="loader border-t-2 rounded-full border-gray-500 bg-gray-300 animate-spin
+          aspect-square w-8 flex justify-center items-center text-yellow-700">
+        </div>
+      </div>
+      
+      <div v-for="(message, index) in formattedMessages" :key="message.id" 
+      class="relative"
+      :class="{
+        'message': true, 
+        'sent mr-1 md:mr-4': message.isOwnMessage && !message.file_url, 
+        'received': !message.isOwnMessage && !message.file_url, 
+        'sent-image mr-1 md:mr-4 mt-1': message.isOwnMessage && message.file_url, 
+        'received-image mt-1': !message.isOwnMessage && message.file_url,
+        'mt-5' : detectMessageGap(index)
+      }">
+          <div class="flex flex-row gap-2 relative group">
+          <!-- Profile picture and username (conditionally shown for the last received message) -->
+            <img 
+            v-if="message.username && !message.isOwnMessage && isLastReceivedMessage(index)" 
+            :src="messageUtilsStore.formatProfilePictureUrl(message.profile_picture)"
+            alt="Profile Picture" 
+            class="w-6 h-6 md:w-8 md:h-8 rounded-full absolute bottom-0 cursor-pointer" 
+            @click="messageUtilsStore.goToProfile(message.username)"
+            />
+            <div 
+              class="flex flex-col ml-8 md:ml-10 max-w-[450px]"
+              :class="{
+
+                'py-1 px-3': !message.file_url, 
+                'py-0 px-0 bg-black': message.file_url, 
+
+                '!bg-transparent': message.file_url,
+
+                // Single message styling (fully rounded for one message)
+                'rounded-full text-black bg-blue-200': getMessagePosition(index) === 'single' && message.isOwnMessage,
+                'rounded-full bg-[#D4D4D4]': getMessagePosition(index) === 'single' && !message.isOwnMessage,
+
+                // Sender-specific styling
+                'rounded-l-3xl rounded-r-md rounded-tr-3xl bg-blue-200': getMessagePosition(index) === 'first' && message.isOwnMessage,
+                'rounded-l-3xl rounded-r-md bg-blue-200': getMessagePosition(index) === 'middle' && message.isOwnMessage,
+                'rounded-l-3xl rounded-r-md rounded-br-4xl bg-blue-200': getMessagePosition(index) === 'last' && message.isOwnMessage,
+
+                // Receiver-specific styling
+                'rounded-r-3xl rounded-l-md rounded-tl-3xl bg-[#D4D4D4]': getMessagePosition(index) === 'first' && !message.isOwnMessage,
+                'rounded-r-3xl rounded-l-md bg-[#D4D4D4]': getMessagePosition(index) === 'middle' && !message.isOwnMessage,
+                'rounded-r-3xl rounded-l-md rounded-bl-3xl bg-[#D4D4D4]': getMessagePosition(index) === 'last' && !message.isOwnMessage,
+              }"
+            >
+              <!-- Message content -->
+              <div v-if="message.file_url" class="w-[175px] h-[230px] md:w-[220px] md:h-[300px] bg-black rounded-3xl">
+                <img 
+                  :src="message.file_url" 
+                  alt="Uploaded Image" 
+                  :class="{
+                    'w-[175px] h-[230px] md:w-[220px] md:h-[300px] cursor-pointer transition duration-300 hover:brightness-50': true,
+                    'rounded-tl-3xl rounded-tr-xl rounded-bl-xl': message.isOwnMessage,
+                    'rounded-tr-3xl rounded-tl-xl rounded-br-xl': !message.isOwnMessage
+                  }"
+                />
+              </div>
+              <div v-else>
+                <p>{{ message.message }}</p>
+              </div>
+
+              <span 
+                class="opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity duration-200 absolute top-1/2 -translate-y-1/2"
+                :class="{
+                  'right-full mr-[-20px] pl-0 md:pl-80': message.isOwnMessage,
+                  'left-full !ml-[20px] pr-0 md:pr-80': !message.isOwnMessage
+                }"
+                @click="messageUtilsStore.toggleMessageOptions(message.id, $event)"
+              >
+                <i class="fa-solid fa-ellipsis-vertical"></i>
+              </span>
+
+              <div 
+                v-if="messageUtilsStore.openMessageId === message.id" 
+                class="absolute bg-white shadow-md rounded-lg p-2 z-10 w-32 flex flex-col space-y-2"
+                :class="{
+                  'right-full bottom-0': message.isOwnMessage,
+                  'left-full ml-10': !message.isOwnMessage,
+                }"
+                @click.stop
+              >
+                <div class="flex flex-row items-center space-x-2 rtl:space-x-reverse">
+                  <span class="text-sm font-normal text-gray-500 dark:text-gray-900">
+                    {{ formatTimeAgo(message.created_at) }}
+                  </span>
+                </div>
+
+                <!-- Copy Button (Only shown if message has no file) -->
+                <button 
+                  v-if="!message.file_url" 
+                  @click="messageUtilsStore.copyMessage(message.message)" 
+                  class="py-2 px-4 bg-gray-100 hover:bg-gray-300 rounded transition cursor-pointer"
+                >
+                  Copy <i class="fa-solid fa-copy"></i> 
+                </button>
+
+                <!-- Delete Button (Only for own messages) -->
+                <button 
+                  v-if="message.isOwnMessage" 
+                  @click="deleteMessage(message.id)" 
+                  class="py-2 px-4 bg-red-500 hover:bg-red-700 text-white rounded transition cursor-pointer"
+                >
+                  Unsent <i class="fa-solid fa-trash"></i>
+                </button>
+                <button 
+                  v-if="!message.isOwnMessage" 
+                  class="py-2 px-4 bg-yellow-300 hover:bg-yellow-500 text-white rounded transition cursor-pointer"
+                >
+                  Report <i class="fa-solid fa-trash"></i>
+                </button>
+              </div>
+            </div>
           </div>
-          <div v-else>
-            {{ message.message }}
+
+          <!-- Message footer (preserved exactly as you had it) -->
+          <div class="message-footer">
+            <span v-if="message.isOwnMessage">
+              <!-- Show "sending" or "sent/delivered" only on the latest sent message -->
+              <span v-if="message.id === latestSentMessageId" class="absolute right-1">
+                <span v-if="message.status === 'sending'">Sending...</span>
+                <span v-if="message.status === 'sent'">
+                   <span>sent</span>
+                </span>
+                <span v-if="message.status === 'delivered'">
+                  <span>delivered</span>
+                </span>
+              </span>
+
+              <!-- Show "read" status only on the specific read message -->
+              <span v-if="message.id === lastReadMessageId " class="absolute right-1">
+                <span v-if="message.status === 'read'">
+                  <span>seen</span>
+                </span>
+              </span>
+            </span>
           </div>
         </div>
-        <div class="message-footer">
-          <span v-if="message.isOwnMessage">
-            <span v-if="message.status === 'sending'">Sending...</span>
-            <span v-if="message.status === 'sent'"><i class="fa-solid fa-check"></i></span>
-            <span v-if="message.status === 'delivered'"><i class="fa-solid fa-check-double"></i></span>
-            <span v-if="message.status === 'read'"><i class="fa-solid fa-check-double" style="color: #075ced;"></i></span>
-          </span>
-          <span>{{ formatTimeAgo(message.created_at) }}</span>
-          <button v-if="message.isOwnMessage" @click="deleteMessage(message.id)" class="delete-button"><i class="fa-solid fa-trash" style="color: #c11a1a;"></i></button>
+      </div>
+      <!-- py-4 border-b-[1px] border-[#D4D4D4] flex flex-row items-center justify-between -->
+      <div class="sidebar fixed inset-0 bg-[#ECECEC] w-full h-full transition-all duration-300 border-l-[1px] z-20 md:relative md:w-1/3 md:h-auto" v-if="isSidebarOpen">
+        <div class="flex flex-col">
+          <div class=" flex flex-row items-center border-b-[1px]">
+            <i class="fa-solid ml-4 fa-angle-left fa-xl" @click="toggleSidebar"></i>
+            <h1 class="ml-4 uppercase font-bold py-4 text-[16px]">details</h1>
+          </div>
+          <p class="font-bold mt-4 ml-4">Members</p>
+          <div @click="messageUtilsStore.goToProfile(otherUser.username)" class="flex w-full items-center gap-4 flex-row mt-2 hover:bg-[#D4D4D4] p-2 cursor-pointer">
+            <img 
+              :src="messageUtilsStore.formatProfilePictureUrl(otherUser.profile_picture)" 
+              alt="Profile Picture" 
+              class="w-12 h-12 rounded-full border"
+            />
+            <h3 class="text-lg font-bold">{{ otherUser.username }}</h3>
+          </div>
+          <!-- this should be at the bottom -->
+          <div class="border-t-[1px] absolute bottom-20 w-full">
+            <button @click="deleteChatforUser(chatID)" class="delete-button text-red-600 px-2 py-4">Delete chat</button>
+          </div>
         </div>
       </div>
     </div>
+
       <div class="form-container">
-        <form @submit.prevent="sendMessage" v-if="!isLoading" class="message-form">
+        <form @submit.prevent="sendMessage" v-if="!isLoading && chatID" class="message-form">
           <textarea v-model="newMessage" placeholder="Type a message" class="message-input" rows="1" @input="adjustTextareaHeight" @keydown="handleKeyDown"></textarea>
           <div class="fileUpload" @click="triggerFileInput">
             <input type="file" class="upload" ref="fileInput" @change="onFileSelected" accept="image/*" style="display: none;"/>
             <i class="fa-solid fa-image fa-lg"></i>
           </div>
           <button type="submit" class="send-button">
-                  <i class="fa-solid fa-paper-plane fa-lg"></i>
+            <i class="fa-solid fa-paper-plane fa-lg"></i>
           </button>
         </form>
       </div>
-
     </div>
   </div>
 </template>
@@ -59,41 +229,53 @@ import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
 import axios from 'axios';
 import { useRoute, useRouter } from 'vue-router';
 import { userStore } from '@/stores/user';
+import { useMessageUtilsStore } from '@/stores/messageUtilsStore';
+import { useChatStore } from '@/stores/chatStore';
 import emitter from '@/eventBus';
 import notify from '@/utils/notify';
 import "@/assets/chat.css"
-import { parseISO, formatDistanceToNow } from 'date-fns';
+import { parseISO, formatDistanceToNow, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 
 const apiUrl = import.meta.env.VITE_WS_URL;
 const messages = ref([]);
 const newMessage = ref('');
-const isLoading = ref(true);
+const isLoading = ref(false);
 const isConnected = ref(false);
 const route = useRoute();
 const router = useRouter();
 const store = userStore();
+const messageUtilsStore = useMessageUtilsStore();
 const username = store.user.username;
 let ws;
 let retryAttempt = 0;
 const maxRetries = 10;
-const offlineStorageKey = `offline-messages-${route.params.chatID}`;
 const chatUser = ref('');
 const messagesContainer = ref(null);
 const fileInput = ref(null);
 const selectedFile = ref(null);
 const loadingOlderMessages = ref(false);
 const hasMoreMessages = ref(true);
+const isSidebarOpen = ref(false);
+const chatID = computed(() => route.params.chatID);
+const chatStore = useChatStore()
+
+const otherUser = ref({ username: "", profile_picture: "" });
+
+const toggleSidebar = () => {
+  isSidebarOpen.value = !isSidebarOpen.value;
+};
+
+const deleteChatforUser = (chatID) => {
+  chatStore.deleteMessagesForUser(chatID)
+}
+
 const wsConst = import.meta.env.VITE_WS;
 const token = store.user.access;
 let notificationsRead = false;
 
-const goToProfile = (username) => {
-  router.push({ name: 'userprofile', params: { username }})
+const closeMenu = (event) => {
+  messageUtilsStore.closeMenu(event);
 };
-
-const formatProfilePictureUrl = (url) => {
-  return url.startsWith('/') ? url.substring(1) : url;
-}
 
 const scrollToBottom = () => {
   const container = messagesContainer.value;
@@ -102,6 +284,30 @@ const scrollToBottom = () => {
   }
 };
 
+const detectMessageGap = (index) => {
+  if (index === 0) return false;
+
+  const currentMessage = formattedMessages.value[index];
+  const prevMessage = formattedMessages.value[index - 1];
+
+  const getTimeDifference = (messageA, messageB) => {
+    if (!messageA || !messageB) return Infinity;
+    return Math.abs(new Date(messageB.created_at) - new Date(messageA.created_at)) / 60000;
+  };
+
+  const latestSeenMessageIndex = formattedMessages.value
+    .map((msg, i) => (msg.status === "read" && msg.isOwnMessage ? i : null))
+    .filter(i => i !== null)
+    .pop(); 
+
+  if (prevMessage && index - 1 === latestSeenMessageIndex) {
+    return true;
+  }
+
+  return getTimeDifference(prevMessage, currentMessage) > 1;
+};
+
+
 const formattedMessages = computed(() => {
   return messages.value.map(message => {
     const isOwnMessage = message.username === username;
@@ -109,40 +315,90 @@ const formattedMessages = computed(() => {
   });
 });
 
-const loadOfflineMessages = () => {
-  const savedMessages = localStorage.getItem(offlineStorageKey);
-  if (savedMessages) {
-    const parsedMessages = JSON.parse(savedMessages);
-    parsedMessages.forEach(msg => {
-      messages.value.push({ ...msg, isOwnMessage: true, status: false });
-    });
+const latestSentMessageId = computed(() => {
+  const sentMessages = formattedMessages.value.filter(msg => msg.isOwnMessage);
+  return sentMessages.length ? sentMessages[sentMessages.length - 1].id : null;
+});
+
+const lastReadMessageId = computed(() => {
+  // Find the last read message by the second user
+  const readMessages = formattedMessages.value.filter(msg => msg.status === 'read' && msg.isOwnMessage);
+  return readMessages.length ? readMessages[readMessages.length - 1].id : null;
+});
+
+const isLastReceivedMessage = (index) => {
+  const currentMessage = formattedMessages.value[index];
+  const nextMessage = formattedMessages.value[index + 1];
+
+  if (!nextMessage || nextMessage.isOwnMessage) {
+    return true;
   }
+
+  return currentMessage.username !== nextMessage.username;
 };
 
-const saveOfflineMessages = () => {
-  const unsentMessages = messages.value.filter(msg => msg.status === false && msg.isOwnMessage);
-  localStorage.setItem(offlineStorageKey, JSON.stringify(unsentMessages));
-};
+const getMessagePosition = (index) => {
+  const prevMessage = formattedMessages.value[index - 1];
+  const nextMessage = formattedMessages.value[index + 1];
+  const currentMessage = formattedMessages.value[index];
 
-const removeOfflineMessages = () => {
-  localStorage.removeItem(offlineStorageKey);
+  const getTimeDifference = (messageA, messageB) => {
+    if (!messageA || !messageB) return Infinity;
+    return Math.abs(new Date(messageB.created_at) - new Date(messageA.created_at)) / 60000;
+  };
+
+  const isSingleMessage =
+    (!prevMessage || prevMessage.username !== currentMessage.username) &&
+    (!nextMessage || nextMessage.username !== currentMessage.username);
+
+  if (isSingleMessage) {
+    return 'single';
+  }
+
+  const isNewSingleMessage =
+    prevMessage &&
+    prevMessage.username === currentMessage.username &&
+    getTimeDifference(prevMessage, currentMessage) > 1 &&
+    (!nextMessage || nextMessage.username !== currentMessage.username);
+
+  if (isNewSingleMessage) {
+    return 'single';
+  }
+
+  const isFirstMessage =
+    (!prevMessage || prevMessage.username !== currentMessage.username || getTimeDifference(prevMessage, currentMessage) > 1);
+
+  const isLastMessage =
+    !nextMessage || nextMessage.username !== currentMessage.username;
+
+  if (isFirstMessage) return 'first';
+  if (isLastMessage) return 'last';
+  return 'middle';
 };
 
 function formatTimeAgo(utcTime) {
-  const localTime = parseISO(utcTime)
-  return formatDistanceToNow(localTime, {addSuffix: true});
-}
+  const localTime = parseISO(utcTime);
 
-const formatTime = (timestamp) => {
-  const timeDiff = Math.floor((Date.now() - new Date(timestamp)) / 1000);
-  if (timeDiff < 60) return 'Just now';
-  const minutes = Math.floor(timeDiff / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
-  const days = Math.floor(hours / 24);
-  return `${days} ${days === 1 ? 'day' : 'days'} ago`;
-};
+  const minutesDiff = differenceInMinutes(new Date(), localTime);
+  if (minutesDiff < 1) {
+    return 'just now';
+  }
+
+  if (minutesDiff < 60) {
+    return `${minutesDiff} min ago`;
+  }
+  const hoursDiff = differenceInHours(new Date(), localTime);
+  if (hoursDiff < 24) {
+    return `${hoursDiff} ${hoursDiff === 1 ? 'hour' : 'hours'} ago`;
+  }
+
+  const daysDiff = differenceInDays(new Date(), localTime);
+  if (daysDiff >= 1) {
+    return `${daysDiff} ${daysDiff === 1 ? 'day' : 'days'} ago`;
+  }
+
+  return formatDistanceToNow(localTime, { addSuffix: true });
+}
 
 const updateMessageTimes = () => {
   messages.value = messages.value.map(message => ({
@@ -192,7 +448,6 @@ const setupNewWebSocket = (chatID, token) => {
       ws.send(JSON.stringify({ message: message.message, username, chatID })); 
       message.status = true;
     });
-    removeOfflineMessages();
   };
 
   ws.onerror = (error) => {
@@ -302,6 +557,7 @@ watch(
       intentionalClosure = true;
       connectWebSocket(newChatID, token);
       intentionalClosure = false;
+      isSidebarOpen.value = false;
     }
   }
 );
@@ -327,6 +583,12 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
         const localTime = new Date(message.created_at).toLocaleString();
         console.log('Converted time:', localTime);
 
+        if (message.username !== username && !otherUser.value.username) {
+          otherUser.value.username = message.username;
+          otherUser.value.profile_picture = `/${message.profile_picture}`;
+          console.log("Other User Saved:", otherUser.value);
+        }
+
         return {
           ...message,
           isOwnMessage: message.username === username,
@@ -345,11 +607,9 @@ const fetchChatHistory = async (chatID, limit = 20, offset = 0) => {
 
       // Sort messages by created_at to maintain correct order
       messages.value = messages.value.slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-
       if (newMessages.length < limit) {
         hasMoreMessages.value = false; 
       }
-      if (offset === 0) loadOfflineMessages();
     }
   } catch (error) {
     console.error('Error fetching chat history:', error);
@@ -368,6 +628,7 @@ const loadChat = async () => {
 watch(() => route.params.chatID, () => {
   messages.value = [];
   chatUser.value = '';
+  otherUser.value = [];
   loadChat();
 })
 
@@ -427,10 +688,10 @@ const onScroll = () => {
 };
 
 onMounted(async () => {
+  document.addEventListener('click', closeMenu);
   const token = store.user.access;
   const chatID = route.params.chatID;
   if (chatID && token) {
-    loadOfflineMessages();
     await fetchChatHistory(chatID);
     chatUser.value = route.query.user || 'Unknown';
     connectWebSocket(chatID, token);
@@ -448,8 +709,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  document.removeEventListener('click', closeMenu);
   if (ws) ws.close();
-  saveOfflineMessages();
 
   const container = messagesContainer.value;
   if (container) {
@@ -525,10 +786,10 @@ const sendMessage = async () => {
 
   let messageToSend = {
     username,
-    message: trimmedMessage || "Sent a file",
+    message: trimmedMessage || "Sent a photo",
     created_at: new Date().toISOString(),
     isOwnMessage: true,
-    status: 'sending', // Set initial status to 'sending'
+    status: 'sending',
   };
 
   console.log("message to send", messageToSend);
@@ -576,10 +837,7 @@ const sendMessage = async () => {
     } catch (error) {
       console.error("Error receiving message ID:", error);
     }
-  } else {
-    saveOfflineMessages();
   }
-
   newMessage.value = '';
   nextTick(scrollToBottom);
 };
@@ -591,7 +849,6 @@ watch(isConnected, (newVal) => {
       ws.send(JSON.stringify(message));
       message.status = 'sent';
     });
-    removeOfflineMessages();
   }
 });
 
