@@ -1,44 +1,62 @@
 <template>
   <div>
-    <h1>Your Chats</h1>
-    <h2>Active Users</h2>
-    <ul v-if="chatStore.activeUsers.length > 0">
-      <li v-for="user in chatStore.activeUsers" :key="user.username">
-        <img :src="user.profile_picture" alt="Profile Picture" width="30" height="30" />
-        {{ user.username }}
-      </li>
-    </ul>
-    <div v-else>No active users found</div>
-
-    <h2>Your Chats</h2>
-    <ul v-if="chatStore.chats.length > 0" class="chat-list">
-  <li 
-    v-for="chat in sortedChats" 
-    :key="chat.chat_id" 
-    :class="['chat-item', { active: isActiveChat(chat.chat_id) }]"
-  >
-    <router-link 
-      :to="{ name: 'chat', params: { chatID: chat.chat_id }, query: { user: chat.user } }" 
-      @click.native="markChatAsRead(chat.chat_id)" 
-      class="chat-link"
-    >
-      <img :src="chat.profile_picture" alt="Profile Picture" class="profile-picture" />
-      <div class="chat-details">
-        <span class="chat-user">{{ chat.user }}</span>
-        <span v-if="chat.unread_count > 0" class="unread-count">({{ chat.unread_count }})</span>
-        <br />
-        <span class="last-message-time">{{ formatTime(chat.last_message_time) }}</span> - 
-        <span class="last-message">{{ chat.last_message }}</span>
-        <span v-if="isUserActive(chat.user)" class="active-indicator">●</span>
-      </div>
-    </router-link>
-    <div class="chat-actions">
-      <button @click="deleteChat(chat.chat_id)" class="delete-button">Delete</button>
-      <button @click="deleteChatforUser(chat.chat_id)" class="delete-button">Delete for Me</button>
+    <div class="chatlist-header" v-if="chatStore.activeUsers.length > 0">
+      <h2 class="uppercase ml-3 font-bold text-[#757575] mt-2">Active Users</h2>
+      <ul class="flex flex-row gap-6 ml-2 mt-2 mb-7">
+        <li class="text-center cursor-pointer" v-for="user in chatStore.activeUsers" :key="user.username">
+          <img class="w-16 rounded-full" :src="user.profile_picture" alt="Profile Picture" width="30" height="30" />
+          <span>{{ user.username }}</span>
+        </li>
+      </ul>
     </div>
-  </li>
-</ul>
 
+    <h2 class="uppercase mt-0 ml-3 text-[#757575] font-bold msg">Messages</h2>
+    <ul v-if="chatStore.chats.length > 0" class="chat-list">
+    <li 
+      v-for="chat in sortedChats" 
+      :key="chat.chat_id" 
+      :class="['chat-item', { active: isActiveChat(chat.chat_id) }]"
+    >
+      <router-link 
+        :to="{ name: 'chat', params: { chatID: chat.chat_id }, query: { user: chat.user } }" 
+        @click.native="markChatAsRead(chat.chat_id)" 
+        class="chat-link"
+      >
+        <div class="relative">
+          <img :src="chat.profile_picture" alt="Profile Picture" class="w-12 rounded-full" />
+          <span v-if="isUserActive(chat.user)" 
+            class="active-indicator absolute left-8 top-8 z-10 bg-white rounded-l-full rounded-full w-4 h-4 flex items-center justify-center"
+            :class="['active-indicator'], {active: isActiveChat(chat.chat_id)}"
+            >●
+          </span>
+        </div>
+        <div class="chat-details ml-4 relative">
+          <span 
+            class="text-[16px] text-black"
+            :class="[
+              'text-[16px] text-black',
+              chat.unread_count > 0 ? 'font-bold' : ''
+            ]"
+            >{{ chat.user }}
+          </span>
+          <span v-if="chat.unread_count > 0" class="absolute top-4 right-3 text-[10px] text-[#757575]">●</span>
+          <br />
+          <div class="flex items-center">
+            <div class="w-auto max-w-[240px] overflow-hidden"> 
+              <span
+                :class="[
+                'truncate block w-auto text-[13px] text-black mr-1',
+                chat.unread_count > 0 ? 'font-bold' : ''
+                ]"
+                >{{ chat.last_message }}
+              </span>
+            </div>
+            <span class="text-[14px] text-[#757575]">• {{ formatTime(chat.last_message_time) }} </span>
+          </div>
+        </div>
+      </router-link>
+    </li>
+    </ul>
     <div v-else>No chats found</div>
     <div v-if="chatStore.error" class="error">{{ chatStore.error }}</div>
   </div>
@@ -126,7 +144,7 @@ const isUserActive = (username) => {
 };
 </script>
 
-<style>
+<style scoped>
 .chat-list {
   list-style: none;
   margin: 0;
@@ -142,9 +160,7 @@ const isUserActive = (username) => {
 }
 
 .chat-item.active {
-  background-color: #e6f7ff; /* Light blue for active chats */
-  color: #1890ff;
-  font-weight: bold;
+  background-color: #D4D4D4;
 }
 
 .chat-link {
@@ -152,7 +168,7 @@ const isUserActive = (username) => {
   flex: 1;
   align-items: center;
   text-decoration: none;
-  color: inherit;
+  color: black;
 }
 
 .profile-picture {
@@ -178,14 +194,14 @@ const isUserActive = (username) => {
   color: gray;
 }
 
-.last-message {
-  font-size: 14px;
-}
-
 .active-indicator {
   color: green;
   font-size: 14px;
-  margin-left: 5px;
+  /* margin-left: 5px; */
+}
+
+.active-indicator.active {
+  background-color: #D4D4D4;
 }
 
 .chat-actions {
@@ -207,4 +223,15 @@ const isUserActive = (username) => {
   background-color: #ff7875;
 }
 
+@media (width <= 1024px) and (width > 769px) {
+  .chat-details {
+    display: none;
+  }
+  .chatlist-header {
+    display: none;
+  }
+  .msg{
+    display: none;
+  }
+}
 </style>
