@@ -14,6 +14,7 @@ import (
 	"github.com/vaanskii/vansify/services/aws"
 	"github.com/vaanskii/vansify/services/chat"
 	follow "github.com/vaanskii/vansify/services/follow"
+	"github.com/vaanskii/vansify/services/search"
 	user "github.com/vaanskii/vansify/services/user"
 	"github.com/vaanskii/vansify/utils"
 )
@@ -108,6 +109,8 @@ func main() {
         v1.POST("/notifications/general/mark-read/:notificationID", auth.AuthMiddleware(), notifications.MarkNotificationAsRead)
         v1.DELETE("/notifications/delete/:notificationID", auth.AuthMiddleware(), notifications.DeleteNotification)
 
+        // search 
+        v1.GET("/search", search.SearchUsers(db.DB))
     }
 
     r.GET("/", func(c *gin.Context) {

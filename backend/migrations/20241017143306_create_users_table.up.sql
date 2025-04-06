@@ -9,5 +9,7 @@ CREATE TABLE users (
     active BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_active TIMESTAMP NULL DEFAULT NULL,
-    becoming_inactive BOOLEAN DEFAULT FALSE
+    becoming_inactive BOOLEAN DEFAULT FALSE,
+
+    FULLTEXT(username)
 );
