@@ -1,9 +1,9 @@
 <template>
   <div>
     <nav v-if="store.user.isAuthenticated && !isChatRoute" class="navbar">
-      <router-link class="nav-link" to="/">
+      <!-- <router-link class="nav-link" to="/">
         <i class="fa-solid fa-house fa-lg"></i>
-      </router-link>
+      </router-link> -->
       <router-link to="/inbox" class="nav-link">
         <i v-if="unreadCount > 0" class="fa-solid fa-comment fa-lg"></i>
         <i v-else class="fa-regular fa-comment fa-lg"></i>
@@ -18,7 +18,24 @@
         <i class="fa-solid fa-user fa-lg"></i>
         <!-- {{ store.user.username }} -->
       </router-link>
-      <button @click="logout" class="nav-button">
+      <div @click="focusInput" 
+          class="relative cursor-pointer w-9 flex items-center border-transparent 
+                  rounded-xl border-2 transition-all duration-500 focus-within:w-64 
+                  focus-within:bg-white">
+        <i
+          class="fa-solid fa-magnifying-glass text-lg px-2 fa-lg transition-all duration-500"
+          :class="{'text-white': !isFocused, 'text-black': isFocused}"></i>
+        <input
+          ref="searchInput"
+          v-model="searchQuery" @keydown.enter="handleSearch"
+          @focus="handleFocus"
+          @blur="handleBlur"
+          type="text" autocomplete="off"
+          class="bg-transparent border-none outline-none w-full opacity-0 
+                pointer-events-none transition-all duration-500 focus:opacity-100 
+                focus:pointer-events-auto focus:pl-2 p-0.5">
+      </div>
+      <button @click="logout" class="nav-button ml-4">
         <i class="fa-solid fa-arrow-right-from-bracket"></i>
       </button>
     </nav>
@@ -29,7 +46,6 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { userStore } from '@/stores/user';
-import { useChatStore } from '@/stores/chatStore';
 import axios from 'axios';
 import emitter from '@/eventBus';
 
@@ -40,7 +56,29 @@ const unreadCount = ref(0);
 const unreadNotificationCount = ref(0);
 const wsConnected = ref(false);
 const loader = ref(true);
-const chatStore = useChatStore();
+
+
+const searchQuery = ref("");
+const searchInput = ref(null);
+const isFocused = ref(false);
+
+const focusInput = () => {
+  searchInput.value?.focus();
+};
+
+const handleFocus = () => {
+  isFocused.value = true;
+};
+
+const handleBlur = () => {
+  isFocused.value = false;
+};
+
+const handleSearch = () => {
+  if (searchQuery.value.trim()) {
+    router.push(`/search?query=${searchQuery.value}`);
+  }
+};
 
 const isMobile = ref(window.innerWidth <= 768);
 const isChatRoute = computed(() => {
@@ -146,6 +184,9 @@ onMounted(() => {
     fetchChatUnreadCount();
     fetchUnreadNotificationCount();
   }
+  if(route.query.query) {
+    searchQuery.value = route.query.query;
+  }
 });
 
 watch(
@@ -157,6 +198,10 @@ watch(
     }
   }
 );
+
+watch(() => route.query.query, (newQuery) => {
+  searchQuery.value = newQuery || "";
+});
 
 watch(route, (newRoute) => {
   if (isMobile.value && newRoute.path.startsWith('/inbox/')) {
