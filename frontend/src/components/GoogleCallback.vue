@@ -38,7 +38,7 @@ onMounted(() => {
     activeUsersStore.connectWebSocket();
 
     // Redirect after successful login
-    router.push('/');
+    router.push('/inbox');
   } catch (err) {
     console.error('Error during Google OAuth callback:', err);
     router.push('/login');
