@@ -170,10 +170,17 @@ func ChatWsHandler(c *gin.Context) {
             continue
         }
 
-        var profilePicture string
-        err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", senderUsername).Scan(&profilePicture)
+
+        var senderProfilePicture string
+        err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", senderUsername).Scan(&senderProfilePicture)
         if err != nil {
-            profilePicture = ""
+            senderProfilePicture = ""
+        }
+
+        var recipientProfilePicture string
+        err = db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", recipientUsername).Scan(&recipientProfilePicture)
+        if err != nil {
+            recipientProfilePicture = ""
         }
 
         // Reset the deleted_for field for the chat and messages
@@ -254,9 +261,9 @@ func ChatWsHandler(c *gin.Context) {
             CreatedAt      string    `json:"created_at"`
         }{
             Message:        incomingMessage,
-            ProfilePicture: profilePicture,
+            ProfilePicture: senderProfilePicture,
             Receiver:       recipientUsername,
-            CreatedAt:      time.Now().Format(time.RFC3339),
+            CreatedAt:      time.Now().UTC().Format(time.RFC3339),
         }
 
         // Marshal the full message
@@ -281,7 +288,8 @@ func ChatWsHandler(c *gin.Context) {
         err = db.DB.QueryRow("SELECT id FROM users WHERE username = ?", recipientUsername).Scan(&recipientID)
         if err != nil {
         } else {
-            if !cm.IsUserInChat(chatID, recipientUsername) { // Only send notifications if the recipient is not in the chat
+            if !cm.IsUserInChat(chatID, recipientUsername) {
+                // Only send notifications if the recipient is not in the chat
                 chat_notifications.NotifyNewMessage(int64(recipientID), incomingMessage)
                 chatUnreadCount, err := chat_notifications.GetUnreadChatMessagesCount(int64(recipientID), chatID)
                 if err == nil {
@@ -295,16 +303,47 @@ func ChatWsHandler(c *gin.Context) {
                             "message":            incomingMessage.Message,
                             "recipient":          recipientUsername,
                             "user":               senderUsername,
-                            "profile_picture":     profilePicture,
+                            "profile_picture":    senderProfilePicture,
+                            "receiver_profile_picture": recipientProfilePicture,
+                            "sender_profile_picture": senderProfilePicture,
                             "sender":             senderUsername,
-                            "last_message_time":  time.Now().Format(time.RFC3339),
+                            "last_message_time":  time.Now().UTC().Format(time.RFC3339),
                             "last_message":       lastMessage,
                         }
                         chatNotificationJSON, _ := json.Marshal(chatNotificationMessage)
                         chat_notifications.ChatNotification.SendChatNotification(recipientUsername, chatNotificationJSON)
                     }
                 }
+            } else {
+                // Simplified notification if the recipient is in the chat
+                chatNotificationMessage := map[string]interface{}{
+                    "chat_id": chatID,
+                    "last_message_time": time.Now().UTC().Format(time.RFC3339),
+                    "last_message": lastMessage,
+                    "user": senderUsername,
+                    "receiver_profile_picture": recipientProfilePicture,
+                    "sender_profile_picture": senderProfilePicture,
+                    "receiver": recipientUsername,
+                    "sender": senderUsername,
+                }
+                chatNotificationJSON, _ := json.Marshal(chatNotificationMessage)
+                chat_notifications.ChatNotification.SendChatNotification(recipientUsername, chatNotificationJSON)
             }
+            
+            // Always send notification to the sender to update their chat view
+            chatNotificationMessage := map[string]interface{}{
+                "chat_id": chatID,
+                "last_message_time": time.Now().UTC().Format(time.RFC3339),
+                "last_message": lastMessage,
+                "user": senderUsername,
+                "receiver_profile_picture": recipientProfilePicture,
+                "sender_profile_picture": senderProfilePicture,
+                "receiver": recipientUsername,
+                "sender": senderUsername,
+            }
+            chatNotificationJSON, _ := json.Marshal(chatNotificationMessage)
+            chat_notifications.ChatNotification.SendChatNotification(senderUsername, chatNotificationJSON)
+                        
         }
     }
 }
@@ -434,14 +473,6 @@ func GetChatHistory(c *gin.Context) {
 
     username := customClaims.Username
 
-    // Fetch the profile picture for the authenticated user
-    var profilePicture string
-    err := db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", username).Scan(&profilePicture)
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching user profile picture"})
-        return
-    }
-
     // Get limit and offset from query parameters
     limit, err := strconv.Atoi(c.DefaultQuery("limit", "20"))
     if err != nil || limit <= 0 {
@@ -456,7 +487,7 @@ func GetChatHistory(c *gin.Context) {
     }
 
     // Fetch messages for the chat with pagination, including messages marked as deleted for the user
-    rows, err := db.DB.Query("SELECT id, chat_id, message, username, file_url, created_at, status FROM messages WHERE chat_id = ? AND (deleted_for IS NULL OR deleted_for NOT LIKE ?) ORDER BY created_at ASC LIMIT ? OFFSET ?", chatID, "%"+username+"%", limit, offset)
+    rows, err := db.DB.Query("SELECT id, chat_id, message, username, file_url, created_at, status FROM messages WHERE chat_id = ? AND (deleted_for IS NULL OR deleted_for NOT LIKE ?) ORDER BY created_at DESC LIMIT ? OFFSET ?", chatID, "%"+username+"%", limit, offset)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching chat history"})
         return
@@ -471,6 +502,14 @@ func GetChatHistory(c *gin.Context) {
             c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning message"})
             return
         }
+
+        // Fetch the profile picture for the message sender
+        var profilePicture string
+        err := db.DB.QueryRow("SELECT profile_picture FROM users WHERE username = ?", message.Username).Scan(&profilePicture)
+        if err != nil {
+            profilePicture = ""
+        }
+
         formattedTime := createdAt.Format(time.RFC3339)
         messages = append(messages, map[string]interface{}{
             "id":              message.ID,
@@ -478,8 +517,8 @@ func GetChatHistory(c *gin.Context) {
             "message":         message.Message,
             "username":        message.Username,
             "created_at":      formattedTime,
-            "profile_picture":  profilePicture,
-            "file_url":         message.FileURL,
+            "profile_picture": profilePicture,
+            "file_url":        message.FileURL,
             "status":          message.Status,
         })
     }
