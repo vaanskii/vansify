@@ -3,7 +3,7 @@
     <div class="chat-box-container">
       <div v-if="chatID" class="py-4 border-b-[1px] border-[#D4D4D4] flex flex-row items-center justify-between">
         <h2 class="ml-4 hidden md:block cursor-pointer font-bold text-[20px]" @click="messageUtilsStore.goToProfile(chatUser)">{{ chatUser }}</h2>
-        <div class="flex flex-row items-center ml-4 block md:hidden gap-4">
+        <div class="flex flex-row items-center ml-4 md:hidden gap-4">
           <i class="fa-solid fa-angle-left fa-xl" @click="router.push('/inbox')"></i>
           <h2 class="font-bold" @click="messageUtilsStore.goToProfile(chatUser)">{{ chatUser }}</h2>
         </div>
