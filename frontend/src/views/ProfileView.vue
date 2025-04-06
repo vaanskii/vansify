@@ -1,38 +1,108 @@
 <template>
-  <div v-if="isAuthenticated">
-    <h1 v-if="userFound">User Profile: {{ user.username }}</h1>
-    <div v-if="userFound">
-      <div class="image-container">
-        <img v-if="imageIsLoaded" class="image" :src="resolveProfilePicture(user.profile_picture)" alt="Profile Picture"/>
-        <div v-else class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>
-      </div>
-      <p><strong>Followers:</strong> <button @click="toggleFollowers">{{ user.followers_count }}</button></p>
-      <p><strong>Followings:</strong> <button @click="toggleFollowings">{{ user.followings_count }}</button></p>
-      <button v-if="!isCurrentUser" @click="toggleFollow">{{ isFollowing ? 'Unfollow' : 'Follow' }}</button>
-      <button v-if="!isCurrentUser && isAuthenticated" @click="handleChat">Chat</button>
-      <button v-if="isCurrentUser && isAuthenticated" @click="deleteProfile">Delete Profile</button>
+  <div v-if="isAuthenticated" class="bg-transparent pt-10 md:pt-20 flex justify-center">
+    <div v-if="userFound" class="max-w-[500px] w-[90%] py-14 rounded-lg shadow-2xl">
 
-      <!-- Followers List -->
-      <div v-if="showFollowers">
-        <h3>Followers</h3>
-        <ul>
-          <li v-for="follower in followers" :key="follower.username">
-            <img :src="resolveProfilePicture(follower.profile_picture)" alt="Profile Picture" class="small-image" />
-            <span @click="goToProfile(follower.username)">{{ follower.username }}</span>
-          </li>
-        </ul>
+      <!-- Profile Header -->
+      <div class="text-center my-4">
+        <img v-if="imageIsLoaded" class="h-32 w-32 rounded-full border-4 border-white dark:border-gray-800 mx-auto my-4"
+          :src="resolveProfilePicture(user.profile_picture)" alt="Profile Picture"
+        />
+        
+        <div class="py-2">
+          <h3 class="font-bold text-2xl text-gray-800 mb-1">{{ user.username }}</h3>
+        </div>
       </div>
 
-      <!-- Followings List -->
-      <div v-if="showFollowings">
-        <h3>Followings</h3>
-        <ul>
-          <li v-for="following in followings" :key="following.username">
-            <img :src="resolveProfilePicture(following.profile_picture)" alt="Profile Picture" class="small-image" />
-            <span @click="goToProfile(following.username)">{{ following.username }}</span>
-          </li>
-        </ul>
+      <!-- Followers & Followings Section -->
+      <div class="px-4 py-2 text-gray-700 flex flex-col justify-center items-center gap-2">
+
+        <!-- Followers -->
+        <div @click="openModal('followers')" 
+            class="cursor-pointer flex items-center justify-between w-1/2 shadow-2xl px-4 py-2 rounded-md transition-all bg-[#F0F0F0] hover:bg-[#E8E8E8]">
+          <p class="font-semibold text-gray-800">Followers:</p> 
+          <button class="hover:underline text-blue-600">{{ user.followers_count }}</button>
+        </div>
+
+        <!-- Followings -->
+        <div @click="openModal('followings')" 
+            class="cursor-pointer flex items-center justify-between w-1/2 shadow-2xl px-4 py-2 rounded-md transition-all bg-[#F0F0F0] hover:bg-[#E8E8E8]">
+          <p class="font-semibold text-gray-800">Followings:</p> 
+          <button class="hover:underline text-blue-600">{{ user.followings_count }}</button>
+        </div>
+
       </div>
+
+      <!-- Popup Modal -->
+      <div v-if="showModal" class="fixed inset-0 flex items-center justify-center backdrop-blur-sm bg-black/30 z-50">
+        <div class="bg-[#D4D4D4]  p-6 rounded-lg shadow-lg max-w-sm w-full h-96 overflow-y-auto relative">
+          
+          <!-- Close Button -->
+          <button @click="closeModal" class="absolute top-2 right-2 text-gray-500 hover:text-gray-900 cursor-pointer">
+            ✖
+          </button>
+
+          <h3 class="text-xl font-bold text-gray-800 mb-4">
+            {{ modalType === 'followers' ? 'Followers' : 'Followings' }}
+          </h3>
+          
+          <ul class="space-y-2">
+            <li @click="goToProfile(user.username)" v-for="user in modalType === 'followers' ? followers : followings" :key="user.username" 
+                class="flex items-center gap-3 hover:bg-[#BEBEBE] rounded-l-3xl rounded-r-xl cursor-pointer px-2 py-1">
+              <img :src="resolveProfilePicture(user.profile_picture)" alt="Profile Picture" 
+                  class="h-10 w-10 rounded-full border border-gray-300 dark:border-gray-700">
+              <span class="text-gray-800">
+                {{ user.username }}
+              </span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="flex justify-center items-center pt-12">
+        <!-- If it's someone else's profile -->
+        <div v-if="!isCurrentUser" class="w-1/2 gap-4 flex justify-between">
+          <button 
+            @click="toggleFollow"
+            class="rounded-full bg-blue-600 text-white cursor-pointer font-bold hover:bg-blue-800 w-40 h-10 p-2">
+            {{ isFollowing ? 'Unfollow' : 'Follow' }}
+          </button>
+
+          <button v-if="isAuthenticated"
+            @click="handleChat"
+            class="rounded-full border-2 border-gray-400 cursor-pointer font-semibold text-black w-40 h-10 p-2">
+            Message
+          </button>
+        </div>
+
+        <!-- If it's the current user, show Delete Profile button -->
+        <button v-if="isCurrentUser && isAuthenticated"
+          @click="showDeleteModal = true"
+          class="rounded-full bg-red-600 text-white cursor-pointer font-bold hover:bg-red-700 w-[90%] px-4 py-2">
+          Delete Profile
+        </button>
+      </div>
+
+      <!-- Delete Confirmation Modal -->
+      <div v-if="showDeleteModal" class="fixed inset-0 flex items-center justify-center backdrop-blur-sm bg-black/30 z-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg max-w-sm w-[90%] relative ">
+
+          <h3 class="text-xl font-bold text-gray-800 mb-4">Are you sure?</h3>
+          <p class="text-gray-600 mb-6">Deleting your profile cannot be undone.</p>
+
+          <div class="flex justify-between">
+            <button @click="confirmDeleteProfile"
+                    class="rounded-full bg-red-600 cursor-pointer text-white font-bold hover:bg-red-700 px-4 py-2">
+              Delete
+            </button>
+            <button @click="showDeleteModal = false"
+                    class="rounded-full border-2 cursor-pointer border-gray-400 font-semibold text-black px-4 py-2">
+              Cancel
+            </button>
+          </div>
+
+        </div>
+      </div>
+
     </div>
     <div v-else>
       <p>User not found.</p>
@@ -56,6 +126,7 @@ const store = userStore();
 const isAuthenticated = ref(store.user.isAuthenticated);
 const userFound = ref(true);
 const imageIsLoaded = ref(false);
+const showDeleteModal = ref(false);
 const user = ref({
   id: '',
   username: '',
@@ -66,10 +137,26 @@ const user = ref({
 });
 const isCurrentUser = ref(false);
 const isFollowing = ref(false);
-const showFollowers = ref(false);
-const showFollowings = ref(false);
 const followers = ref([]);
 const followings = ref([]);
+
+const showModal = ref(false);
+const modalType = ref("");
+
+const openModal = async (type) => {
+  modalType.value = type;
+  showModal.value = true;
+
+  if (type === "followers") {
+    await fetchFollowers(user.value.username);
+  } else {
+    await fetchFollowings(user.value.username);
+  }
+};
+
+const closeModal = () => {
+  showModal.value = false;
+};
 
 function resolveProfilePicture(profilePicture) {
   if (profilePicture.startsWith('/')) {
@@ -91,6 +178,15 @@ const fetchFollowers = async (username) => {
     console.error('Error fetching followers:', error);
   }
 };
+
+const confirmDeleteProfile = async () => {
+  try {
+    await deleteProfile(); 
+    showDeleteModal.value = false;
+  } catch (error) {
+    console.error("Error deleting profile:", error);
+  }
+}
 
 const deleteProfile = async () => {
   try {
@@ -117,28 +213,6 @@ const fetchFollowings = async (username) => {
     followings.value = response.data.followings;
   } catch (error) {
     console.error('Error fetching followings:', error);
-  }
-};
-
-const toggleFollowers = async () => {
-  showFollowers.value = !showFollowers.value;
-  if (showFollowers.value) {
-    await fetchFollowers(user.value.username);
-  }
-};
-
-const toggleFollowings = async () => {
-  showFollowings.value = !showFollowings.value;
-  if (showFollowings.value) {
-    await fetchFollowings(user.value.username);
-  }
-};
-
-const updateFollowCount = (increment) => {
-  if (increment) {
-    user.value.followers_count += 1;
-  } else {
-    user.value.followers_count -= 1;
   }
 };
 
@@ -202,6 +276,7 @@ watch(route, async (newRoute) => {
 });
 
 const goToProfile = (username) => {
+  closeModal();
   router.push({ path: `/${username}` });
 };
 
@@ -225,6 +300,14 @@ const toggleFollow = async () => {
     isFollowing.value = !isFollowing.value;
   } catch (error) {
     console.error('Error toggling follow status:', error);
+  }
+};
+
+const updateFollowCount = (increment) => {
+  if (increment) {
+    user.value.followers_count += 1;
+  } else {
+    user.value.followers_count -= 1;
   }
 };
 
@@ -277,66 +360,5 @@ const handleChat = async () => {
     border-radius: 50%;
     margin-right: 10px;
   }
-
-
-.lds-ellipsis,
-.lds-ellipsis div {
-  box-sizing: border-box;
-}
-.lds-ellipsis {
-  display: inline-block;
-  position: relative;
-  width: 80px;
-  height: 80px;
-}
-.lds-ellipsis div {
-  position: absolute;
-  top: 33.33333px;
-  width: 13.33333px;
-  height: 13.33333px;
-  border-radius: 50%;
-  background: currentColor;
-  animation-timing-function: cubic-bezier(0, 1, 1, 0);
-}
-.lds-ellipsis div:nth-child(1) {
-  left: 8px;
-  animation: lds-ellipsis1 0.6s infinite;
-}
-.lds-ellipsis div:nth-child(2) {
-  left: 8px;
-  animation: lds-ellipsis2 0.6s infinite;
-}
-.lds-ellipsis div:nth-child(3) {
-  left: 32px;
-  animation: lds-ellipsis2 0.6s infinite;
-}
-.lds-ellipsis div:nth-child(4) {
-  left: 56px;
-  animation: lds-ellipsis3 0.6s infinite;
-}
-@keyframes lds-ellipsis1 {
-  0% {
-    transform: scale(0);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-@keyframes lds-ellipsis3 {
-  0% {
-    transform: scale(1);
-  }
-  100% {
-    transform: scale(0);
-  }
-}
-@keyframes lds-ellipsis2 {
-  0% {
-    transform: translate(0, 0);
-  }
-  100% {
-    transform: translate(24px, 0);
-  }
-}
 
 </style>
