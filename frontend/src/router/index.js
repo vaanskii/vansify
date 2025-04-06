@@ -13,6 +13,7 @@ import { userStore } from '@/stores/user';
 import GoogleCallback from '@/components/GoogleCallback.vue';
 import ChooseUsername from '@/components/ChooseUsername.vue';
 import InboxWrapper from '@/views/InboxWrapper.vue';
+import SearchView from '@/views/SearchView.vue';
 
 // Function to determine if the device is mobile
 const isMobile = () => window.innerWidth <= 768;
@@ -63,10 +64,15 @@ const desktopRoutes = [
 const routes = [
   {
     path: '/',
-    name: 'home',
-    component: HomeView,
+    redirect: '/inbox'
+  },
+  {
+    path: '/search',
+    name: 'search',
+    component: SearchView,
     meta: {
-      title: 'Vansify'
+      title: 'Search',
+      requiresAuth: true,
     }
   },
   {

@@ -91,7 +91,7 @@ const login = async () => {
 
     activeUsersStore.connectWebSocket();
 
-    router.push('/');
+    router.push('/inbox');
   } catch (err) {
     console.error('Login failed:', err);
     error.value = err.response ? err.response.data.error : 'An error occurred';
