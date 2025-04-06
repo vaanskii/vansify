@@ -27,16 +27,23 @@ func NotifyNewMessage(userID int64, message models.Message) {
         log.Printf("Error getting unread message count for chat: %v", err)
         return
     }
+    // Fetch the last message for notifications
+    var lastMessage string
+    err = db.DB.QueryRow("SELECT message FROM messages WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1", message.ChatID).Scan(&lastMessage)
+    if err != nil {
+        log.Printf("Error getting last message: %v", err)
+        return
+    }
 
     // Broadcast the notification to all connected clients
     notificationMessage, _ := json.Marshal(map[string]interface{}{
-        "user_id":          userID,
-        "chat_id":          message.ChatID,
-        "unread_count":     chatUnreadCount,
-        "message":          message.Message,
-        "user":             message.Username,
-        "sender":           message.Username,
-        "last_message_time": time.Now().Format(time.RFC3339),
+        "user_id":           userID,
+        "chat_id":           message.ChatID,
+        "message":           message.Message,
+        "user":              message.Username,
+        "sender":            message.Username,
+        "last_message_time": time.Now().UTC().Format(time.RFC3339),
+        "last_message":      lastMessage,
     })
     ChatNotification.SendChatNotification(message.Username, notificationMessage)
 }
