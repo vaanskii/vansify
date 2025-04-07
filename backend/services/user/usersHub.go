@@ -110,7 +110,13 @@ func FetchActiveUsersAndBroadcast(db *sql.DB) {
         ProfilePicture string `json:"profile_picture"`
     }
 
-    rows, err := db.Query("SELECT username, profile_picture FROM users WHERE active = true")
+    rows, err := db.Query(`
+        SELECT u.username, u.profile_picture 
+        FROM users u
+        JOIN chats c ON (c.user1 = u.username OR c.user2 = u.username)
+        WHERE u.active = true 
+        GROUP BY u.username, u.profile_picture
+    `)
     if err != nil {
         return
     }
@@ -132,16 +138,22 @@ func FetchActiveUsersAndBroadcast(db *sql.DB) {
 
     clientMutex.Lock()
     for client, username := range clients {
-        // Exclude the broadcasting user
         usersToSend := []struct {
             Username       string `json:"username"`
             ProfilePicture string `json:"profile_picture"`
         }{}
         for _, user := range activeUsers {
-            if user.Username != username {
+            var chatExists bool
+            err := db.QueryRow(`
+                SELECT EXISTS(
+                    SELECT 1 FROM chats WHERE (user1 = ? AND user2 = ?) OR (user1 = ? AND user2 = ?)
+                )`, username, user.Username, user.Username, username).Scan(&chatExists)
+
+            if err == nil && chatExists {
                 usersToSend = append(usersToSend, user)
             }
         }
+
         err := client.WriteJSON(usersToSend)
         if err != nil {
             client.Close()

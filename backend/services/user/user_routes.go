@@ -188,7 +188,6 @@ func GetUserChats(c *gin.Context) {
     c.JSON(http.StatusOK, gin.H{"chats": chats})
 }
 
-// Helper function to check if the username is in the deleted_for list
 func contains(deletedFor, username string) bool {
     for _, u := range strings.Split(deletedFor, ",") {
         if u == username {
@@ -214,7 +213,13 @@ func GetActiveUsersHandler(c *gin.Context) {
 
     authenticatedUsername := customClaims.Username
 
-    rows, err := db.DB.Query("SELECT username, profile_picture FROM users WHERE active = true AND username != ?", authenticatedUsername)
+    rows, err := db.DB.Query(`
+        SELECT u.username, u.profile_picture 
+        FROM users u
+        JOIN chats c ON (c.user1 = u.username OR c.user2 = u.username)
+        WHERE u.active = true AND u.username != ? AND (c.user1 = ? OR c.user2 = ?)`,
+        authenticatedUsername, authenticatedUsername, authenticatedUsername)
+    
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving active users"})
         return
