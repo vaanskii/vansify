@@ -4,6 +4,7 @@ import axios from 'axios';
 import { userStore } from '@/stores/user';
 import { useRouter } from 'vue-router';
 import emitter from '@/eventBus';
+import { parseISO, formatDistanceToNow, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 
 export const useNotificationStore = defineStore('notificationStore', () => {
   const store = userStore();
@@ -25,10 +26,10 @@ export const useNotificationStore = defineStore('notificationStore', () => {
     }
   };
 
-  const updateMessageTimes = () => {
+  const updateNotificationTimes = () => {
     notifications.value = notifications.value.map(notification => ({
       ...notification,
-      time: formatTime(notification.created_at) 
+      time: formatTimeAgo(notification.created_at) 
     }));
   };
 
@@ -64,6 +65,31 @@ export const useNotificationStore = defineStore('notificationStore', () => {
     }
   };
 
+  function formatTimeAgo(utcTime) {
+    const localTime = parseISO(utcTime);
+  
+    const minutesDiff = differenceInMinutes(new Date(), localTime);
+    if (minutesDiff < 1) {
+      return 'Just now';
+    }
+  
+    if (minutesDiff < 60) {
+      return `${minutesDiff}m`;
+    }
+    
+    const hoursDiff = differenceInHours(new Date(), localTime);
+    if (hoursDiff < 24) {
+      return `${hoursDiff}h`;
+    }
+  
+    const daysDiff = differenceInDays(new Date(), localTime);
+    if (daysDiff >= 1) {
+      return `${daysDiff}d`;
+    }
+  
+    return formatDistanceToNow(localTime, { addSuffix: true });
+  }
+
   const formatTime = (timestamp) => {
     const timeDiff = Math.floor((Date.now() - new Date(timestamp)) / 1000);
     if (timeDiff < 60) return 'Just now';
@@ -79,9 +105,10 @@ export const useNotificationStore = defineStore('notificationStore', () => {
     notifications,
     loader,
     fetchNotifications,
-    updateMessageTimes,
+    updateNotificationTimes,
     markAsReadAndRedirect,
     deleteNotification,
-    formatTime
+    formatTime,
+    formatTimeAgo
   };
 });
