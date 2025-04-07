@@ -214,14 +214,27 @@ func CheckFollowStatus(c *gin.Context) {
         return
     }
 
-    var followExists bool
-    err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_id = ? AND following_id = ?)", followerID, followingID).Scan(&followExists)
+    var follows bool
+    var followedBy bool
+
+    // Check if the followerUsername follows followingUsername
+    err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_id = ? AND following_id = ?)", followerID, followingID).Scan(&follows)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking follow status"})
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{"is_following": followExists})
+    // Check if the followingUsername follows followerUsername (mutual follow check)
+    err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM followers WHERE follower_id = ? AND following_id = ?)", followingID, followerID).Scan(&followedBy)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Error checking mutual follow status"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "is_following": follows,
+        "is_followed_by": followedBy,
+    })
 }
 
 func GetFollowers(c *gin.Context) {

@@ -64,7 +64,11 @@
           <button 
             @click="toggleFollow"
             class="rounded-full bg-blue-600 text-white cursor-pointer font-bold hover:bg-blue-800 w-40 h-10 p-2">
-            {{ isFollowing ? 'Unfollow' : 'Follow' }}
+            {{ 
+              isFollowing 
+              ? 'Unfollow' 
+              : (isFollowedByMe ? 'Follow Back' : 'Follow') 
+            }}
           </button>
 
           <button v-if="isAuthenticated"
@@ -137,6 +141,7 @@ const user = ref({
 });
 const isCurrentUser = ref(false);
 const isFollowing = ref(false);
+const isFollowedByMe = ref(false);
 const followers = ref([]);
 const followings = ref([]);
 
@@ -223,22 +228,24 @@ onMounted(async () => {
   const loggedInUsername = userData.username;
 
   isCurrentUser.value = username === loggedInUsername;
+  
   try {
     const response = await axios.get(`/v1/user/${username}`, {
-      headers: {
-        Authorization: `Bearer ${store.user.access}`,
-      },
+      headers: { Authorization: `Bearer ${store.user.access}` },
     });
     user.value = response.data;
     user.value.profile_picture = `/${user.value.profile_picture}`;
     imageIsLoaded.value = true;
-    // Check follow status
-    const followStatusResponse = await axios.get(`/v1/is-following/${loggedInUsername}/${username}`, {
-      headers: {
-        Authorization: `Bearer ${store.user.access}`,
-      },
-    });
-    isFollowing.value = followStatusResponse.data.is_following;
+
+    // ✅ Only check `isFollowedByMe` if viewing someone else's profile
+    if (!isCurrentUser.value) {
+      const followStatusResponse = await axios.get(`/v1/is-following/${loggedInUsername}/${username}`, {
+        headers: { Authorization: `Bearer ${store.user.access}` },
+      });
+
+      isFollowing.value = followStatusResponse.data.is_following;
+      isFollowedByMe.value = followStatusResponse.data.is_followed_by;
+    }
   } catch (error) {
     console.error('Error fetching user details or follow status:', error);
     userFound.value = false;
