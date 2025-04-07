@@ -123,14 +123,6 @@ onUnmounted(() => {
   emitter.off('active-users-fetched', chatStore.handleActiveUsersFetched);
 });
 
-const deleteChat = (chatID) => {
-  chatStore.deleteChat(chatID);
-};
-
-const deleteChatforUser = (chatID) => {
-  chatStore.deleteMessagesForUser(chatID)
-}
-
 const markChatAsRead = (chatID) => {
   chatStore.markChatAsRead(chatID);
 };

@@ -1,13 +1,19 @@
 <template>
-  <div class="inbox-container">
+  <div v-if="store.user.isAuthenticated" class="inbox-container">
     <ChatListView class="chat-list" />
     <Chat class="chat-view" />
   </div>
+  <div v-else>
+    <p>Please make authorization first.</p>
+  </div>
 </template>
   
-  <script setup>
+<script setup>
 import Chat from './Chat.vue';
 import ChatListView from './ChatListView.vue';
+import { userStore } from '@/stores/user';
+
+const store = userStore();
 </script>
   
 <style scoped>

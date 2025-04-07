@@ -160,7 +160,7 @@ const logout = async () => {
     console.error('Error logging out:', error);
   }
   store.removeToken();
-  router.push('/');
+  router.push('/login');
 };
 
 
